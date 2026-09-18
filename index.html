@@ -1822,7 +1822,10 @@ class EngineSim {
     this.agc = 400;
     this.env = 0; this.exhEnv = 0; this.refEnv = 0; this.sideLp = 0; this.lim = 0.5;
     this.iLow = 0; this.iBand = 0;                 // induction resonator
+    this.i2Low = 0; this.i2Band = 0; this.i2Track = 0; // flat-six intake formant
     this.mLow = 0; this.mBand = 0; this.mechEnv = 0; // valve gear
+    this.raspLow = 0; this.raspBand = 0; this.raspPrev = 0;
+    this.fanPhase = 0;
     this.outLpL = 0; this.outLpR = 0;
     this.dcxL = 0; this.dcyL = 0; this.dcxR = 0; this.dcyR = 0;
     this.rvA = new Float32Array(1789); this.rvAi = 0;
@@ -1841,6 +1844,11 @@ class EngineSim {
     this.VdL = this.Vd * 1000 * n;          // total litres
     this.I = c.inertia * (0.6 + n * 0.05) * clamp(this.VdL / 4, 0.45, 1.7);
     this.n = n;
+    /* A 911-like voice is a consequence of the opposed six layout: two banks
+       firing every 120 crank degrees into nearly equal primaries. Keep this
+       automatic so a shared code sounds the same without carrying a hidden
+       brand switch. */
+    this.flatSixVoice = c.layout === "B" && n === 6;
 
     this.buildTables();
 
@@ -1892,7 +1900,9 @@ class EngineSim {
     const svf = f => 2 * Math.sin(Math.PI * clamp(f, 20, this.sr * 0.35) / this.sr);
     this.iF = svf(343 / (4 * c.runner));                 // induction quarter-wave
     this.iQ = 0.55;
+    this.i2F = svf(this.flatSixVoice ? 1280 : 980); this.i2Q = 0.42;
     this.mF = svf(2900); this.mQ = 0.85;                 // valve gear rattle
+    this.raspF = svf(this.flatSixVoice ? 3350 : 2600); this.raspQ = 0.34;
     this.bF = svf(343 / (2 * (c.header + c.collector))); // exhaust body note
     this.bQ = 0.42;
     /* radiation from the pipe mouth: differentiator below the mouth cutoff,
@@ -1914,6 +1924,18 @@ class EngineSim {
     this.gColl = 0.988;
     this.kOut = 0.75;        // final smoothing on both channels
     this.refEnd = 0.72;      // how much of the wave the open end throws back
+    if (this.flatSixVoice) {
+      /* Short, balanced primaries preserve the evenly spaced six-cylinder
+         pulses. Slightly quicker gas/pipe response keeps the upper harmonics
+         that make a high-rev flat six sound crisp instead of woolly. */
+      this.kInj = 0.38;
+      this.kRunner = 0.68; this.gRunner = 0.975;
+      this.kColl = 0.78; this.gColl = 0.991;
+      this.kOut = 0.88;
+      this.refEnd = 0.67;
+    }
+    this.i2Low = this.i2Band = this.i2Track = 0;
+    this.raspLow = this.raspBand = this.raspPrev = 0;
     this.buildPipes();
   }
 
@@ -2205,7 +2227,7 @@ class EngineSim {
 
     /* ---- exhaust junctions ---- */
     const Lc = this.Lc, colF = this.colF, colB = this.colB, pC = this.pC;
-    let mixM = 0, mixS = 0;
+    let mixM = 0, mixS = 0, raspFeed = 0;
     const mCoef = 0.02 + 0.5 * (1 - c.muffler);
     const mMix = c.muffler;
     for (let b = 0; b < this.nb; b++) {
@@ -2233,6 +2255,7 @@ class EngineSim {
       this.uPrev[b] = u;
       this.radLp[b] += (dv - this.radLp[b]) * this.kRad;
       const rad = this.radLp[b];
+      raspFeed += rad * (b === 0 ? 1 : 0.96);
 
       /* the system's own body note — the length of pipe behind the mouth */
       this.bLow[b] += this.bF * this.bBand[b];
@@ -2304,7 +2327,23 @@ class EngineSim {
     this.iLow += this.iF * this.iBand;
     const iHi = nz * intakeFlow - this.iLow - this.iQ * this.iBand;
     this.iBand += this.iF * iHi;
-    const intake = this.iBand * bed * c.intakeMix * (0.3 + 0.7 * this.pman);
+    let intake = this.iBand * bed * c.intakeMix * (0.3 + 0.7 * this.pman);
+
+    /* The second intake formant is driven by the actual valve-flow pulses,
+       rather than by another oscillator. On an opposed six it supplies the
+       hard-edged induction howl that comes in above the mid-range. */
+    this.i2Track += (intakeFlow - this.i2Track) * 0.0025;
+    const flowPulse = intakeFlow - this.i2Track;
+    this.i2Low += this.i2F * this.i2Band;
+    const i2Hi = flowPulse - this.i2Low - this.i2Q * this.i2Band;
+    this.i2Band += this.i2F * i2Hi;
+    const flatRise = this.flatSixVoice
+      ? clamp((rpm - 1200) / Math.max(1800, c.redline - 1200), 0, 1)
+      : 0;
+    if (this.flatSixVoice) {
+      intake += this.i2Band * bed * c.intakeMix * (0.20 + 0.95 * flatRise)
+        * (0.35 + 0.65 * this.pman) * 2.2;
+    }
 
     /* Valve gear. Its loudness follows the valve train, not the exhaust, so it
        is referenced to a long-term level: at idle the exhaust falls away and the
@@ -2316,7 +2355,28 @@ class EngineSim {
     this.mBand += this.mF * mHi;
     const mech = this.mBand * (bed * 0.35 + this.refEnv * 0.45) * 0.30;
 
-    let l = mixL + intake + mech, rr = mixR + intake * 0.92 + mech * 0.8;
+    /* A band-limited edge from the real pipe-mouth pulse adds the metallic
+       rasp of a free-breathing flat six. It only rises with engine speed and
+       load; idle stays round and mechanical. */
+    const pulseEdge = raspFeed - this.raspPrev; this.raspPrev = raspFeed;
+    this.raspLow += this.raspF * this.raspBand;
+    const raspHi = pulseEdge - this.raspLow - this.raspQ * this.raspBand;
+    this.raspBand += this.raspF * raspHi;
+    const rasp = this.flatSixVoice
+      ? this.raspBand * (0.08 + 0.72 * flatRise) * (0.28 + 0.72 * this.pman) * 10.0
+      : 0;
+
+    /* The belt-driven cooling fan is deliberately quiet. Its speed tracks the
+       crank at a fixed ratio, so it glides naturally through the rev range and
+       never turns into an unrelated synthesizer tone. */
+    this.fanPhase += this.omega * 17.38 * dt; // 1.58:1 fan drive × eleven blades
+    if (this.fanPhase > Math.PI * 2) this.fanPhase -= Math.PI * 2;
+    const fan = this.flatSixVoice
+      ? Math.sin(this.fanPhase) * bed * (0.006 + 0.020 * flatRise)
+      : 0;
+
+    let l = mixL + intake + mech + rasp + fan;
+    let rr = mixR + intake * 0.92 + mech * 0.8 + rasp * 0.84 + fan * 0.90;
 
     /* slow automatic gain so every build lands in a usable range */
     const mag = Math.abs(l) + Math.abs(rr);
@@ -2357,14 +2417,14 @@ class EngineSim {
    Config, presets
    ============================================================ */
 const DEFAULT = {
-  n: 8, layout: "V", bankAngle: 90, crank: "cross", merge: false,
-  bore: 94, stroke: 90, rodRatio: 1.75, cr: 10.5,
-  cam: 0.35, portIn: 1000, portEx: 1800, advance: 20, runner: 0.32, unequal: 0.12,
-  redline: 6800, idle: 800, inertia: 0.28,
-  header: 0.45, collector: 1.30, muffler: 0.45,
+  n: 6, layout: "B", bankAngle: 180, crank: "even", merge: false,
+  bore: 102, stroke: 81.5, rodRatio: 1.9, cr: 13.2,
+  cam: 0.50, portIn: 2000, portEx: 3200, advance: 25, runner: 0.23, unequal: 0.055,
+  redline: 9000, idle: 980, inertia: 0.17,
+  header: 0.48, collector: 0.92, muffler: 0.16,
   volume: 0.75, room: 0.18,
-  tone: 0.30, body: 0.45, intakeMix: 0.30,
-  afr: 13.2, chamber: 1
+  tone: 0.82, body: 0.42, intakeMix: 0.65,
+  afr: 12.9, chamber: 1
 };
 
 const PRESETS = {
@@ -2376,7 +2436,7 @@ const PRESETS = {
   "i5": { name: "直5 (2.5L ラリー)", cfg: { n: 5, layout: "I", bankAngle: 0, crank: "even", merge: false, bore: 82, stroke: 92, rodRatio: 1.7, cr: 10, cam: 0.38, portIn: 1200, runner: 0.36, portEx: 2000, advance: 19, redline: 7000, idle: 800, inertia: 0.30, header: 0.48, unequal: 0.20, collector: 1.35, muffler: 0.3 } },
   "v10": { name: "V10 90° (5.2L)", cfg: { n: 10, layout: "V", bankAngle: 90, crank: "even", merge: false, bore: 84.5, stroke: 93, rodRatio: 1.85, cr: 12.7, cam: 0.42, portIn: 1700, runner: 0.22, portEx: 2400, advance: 23, redline: 8400, idle: 900, inertia: 0.22, header: 0.55, unequal: 0.06, collector: 1.0, muffler: 0.2 } },
   "v12": { name: "V12 60° (6.5L)", cfg: { n: 12, layout: "V", bankAngle: 60, crank: "even", merge: false, bore: 95, stroke: 76, rodRatio: 1.95, cr: 11.8, cam: 0.38, portIn: 1750, runner: 0.20, portEx: 2500, advance: 22, redline: 8300, idle: 850, inertia: 0.24, header: 0.50, unequal: 0.06, collector: 1.05, muffler: 0.22 } },
-  "f6": { name: "水平対向6 (3.0L)", cfg: { n: 6, layout: "B", bankAngle: 180, crank: "even", merge: false, bore: 95, stroke: 70, rodRatio: 1.9, cr: 11.3, cam: 0.38, portIn: 1450, runner: 0.28, portEx: 2200, advance: 22, redline: 7600, idle: 830, inertia: 0.22, header: 0.60, unequal: 0.08, collector: 1.1, muffler: 0.25 } },
+  "f6": { name: "水平対向6 高回転スポーツ (4.0L・ポルシェ風)", cfg: { n: 6, layout: "B", bankAngle: 180, crank: "even", merge: false, bore: 102, stroke: 81.5, rodRatio: 1.9, cr: 13.2, cam: 0.50, portIn: 2000, runner: 0.23, portEx: 3200, advance: 25, redline: 9000, idle: 980, inertia: 0.17, header: 0.48, unequal: 0.055, collector: 0.92, muffler: 0.16, tone: 0.82, body: 0.42, intakeMix: 0.65, afr: 12.9, chamber: 1 } },
   "f4": { name: "水平対向4 (2.0L 不等長)", cfg: { n: 4, layout: "B", bankAngle: 180, crank: "even", merge: false, bore: 92, stroke: 75, rodRatio: 1.75, cr: 10.5, cam: 0.34, portIn: 1150, runner: 0.32, portEx: 1900, advance: 20, redline: 6800, idle: 800, inertia: 0.26, header: 0.30, unequal: 0.55, collector: 1.5, muffler: 0.45 } },
   "vtwin": { name: "V型2気筒 45° (クルーザー)", cfg: { n: 2, layout: "V", bankAngle: 45, crank: "360", merge: false, bore: 101, stroke: 111, rodRatio: 1.7, cr: 9.5, cam: 0.28, portIn: 850, runner: 0.45, portEx: 1500, advance: 24, redline: 5800, idle: 950, inertia: 0.30, header: 0.75, unequal: 0.04, collector: 1.6, muffler: 0.35 } },
   "twin270": { name: "並列2気筒 270° (アドベンチャー)", cfg: { n: 2, layout: "I", bankAngle: 0, crank: "270", merge: false, bore: 88, stroke: 78, rodRatio: 1.8, cr: 11.5, cam: 0.36, portIn: 1250, runner: 0.24, portEx: 1900, advance: 22, redline: 9000, idle: 1150, inertia: 0.13, header: 0.45, unequal: 0.04, collector: 1.0, muffler: 0.3 } }
@@ -2746,9 +2806,20 @@ function deriveVoice() {
   /* the weight under the note follows the swept volume */
   cfg.body = clamp(+(0.14 + 0.60 * Math.min(1, disp / 6)).toFixed(3), 0, 1);
   cfg.intakeMix = clamp(+(0.08 + 0.60 * port + 0.22 * camN).toFixed(3), 0, 1);
-  /* a vee collects into a short balanced pair; a flat-four's manifold is the
-     famously unequal one, and an inline sits between them */
-  cfg.unequal = cfg.layout === "B" ? 0.52 : cfg.layout === "I" ? 0.28 : 0.10;
+  /* A flat-four gets the familiar unequal-primary beat. An opposed six uses
+     a much more even three-into-one bank arrangement; giving both the same
+     spread erased the clean 120-degree flat-six cadence. */
+  const flatSix = cfg.layout === "B" && n === 6;
+  cfg.unequal = cfg.layout === "B" ? (flatSix ? 0.055 : 0.52) : cfg.layout === "I" ? 0.28 : 0.10;
+  if (flatSix) {
+    cfg.header = clamp(+(cfg.header * 0.84).toFixed(3), 0.12, 1.2);
+    cfg.collector = clamp(+(cfg.collector * 0.72).toFixed(3), 0.3, 3);
+    cfg.runner = clamp(+(cfg.runner * 0.82).toFixed(3), 0.2, 0.8);
+    cfg.muffler = clamp(+(cfg.muffler * 0.50).toFixed(3), 0, 1);
+    cfg.tone = Math.max(cfg.tone, 0.72);
+    cfg.body = clamp(Math.max(cfg.body, 0.36), 0, 1);
+    cfg.intakeMix = clamp(Math.max(cfg.intakeMix, 0.62), 0, 1);
+  }
 }
 
 /* ============================================================
@@ -5354,17 +5425,25 @@ const LOCKKEY = "cc.itemlocks";
    is unlocked (or its password deleted) that choice is stored and this default
    is not consulted for it again. */
 const PRELOCKS = {
-  "preset":    { salt: "f31bf58fe2cf", hash: "10ywx8a", val: "v8cross", locked: true },
-  "disp":      { salt: "5558cf96812c", hash: "moptlq",  val: 5,    locked: true },
-  "n":         { salt: "d6a2828061ce", hash: "149n90j", val: 8,    locked: true },
-  "layout":    { salt: "30ab2a3aa930", hash: "111k01h", val: "V",  locked: true },
-  "bankAngle": { salt: "b24e1dee113e", hash: "zi9fzh",  val: 90,   locked: true },
-  "cr":        { salt: "9b478fb42ee1", hash: "b781ky",  val: 10.5, locked: true },
+  "preset":    { salt: "f31bf58fe2cf", hash: "10ywx8a", val: "f6", locked: true },
+  "disp":      { salt: "5558cf96812c", hash: "moptlq",  val: 4,    locked: true },
+  "n":         { salt: "d6a2828061ce", hash: "149n90j", val: 6,    locked: true },
+  "layout":    { salt: "30ab2a3aa930", hash: "111k01h", val: "B",  locked: true },
+  "bankAngle": { salt: "b24e1dee113e", hash: "zi9fzh",  val: 180,  locked: true },
+  "cr":        { salt: "9b478fb42ee1", hash: "b781ky",  val: 13.2, locked: true },
   "chamber":   { salt: "731ed5a2ede0", hash: "15e8w1l", val: 1,    locked: true },
-  "portIn":    { salt: "6738c3b299a5", hash: "6amo5t",  val: 1000, locked: true },
-  "cam":       { salt: "4304f643c3fb", hash: "yh20j3",  val: 0.4,  locked: true },
-  "afr":       { salt: "af3641d98947", hash: "1fkz7ui", val: 13.2, locked: true },
-  "advance":   { salt: "11a64c03d35e", hash: "5mn7so",  val: 20,   locked: true }
+  "portIn":    { salt: "6738c3b299a5", hash: "6amo5t",  val: 2000, locked: true },
+  "cam":       { salt: "4304f643c3fb", hash: "yh20j3",  val: 0.5,  locked: true },
+  "afr":       { salt: "af3641d98947", hash: "1fkz7ui", val: 12.9, locked: true },
+  "advance":   { salt: "11a64c03d35e", hash: "5mn7so",  val: 25,   locked: true }
+};
+
+/* Upgrade only the untouched factory V8 lock set. Any field the owner changed,
+   unlocked or relocked makes the fingerprint differ, so personal locks are
+   never replaced by this sound update. */
+const LEGACY_FACTORY_LOCK_VALUES = {
+  preset: "v8cross", disp: 5, n: 8, layout: "V", bankAngle: 90,
+  cr: 10.5, chamber: 1, portIn: 1000, cam: 0.4, afr: 13.2, advance: 20
 };
 
 const lockBar = document.getElementById("lockBar"), lockIco = document.getElementById("lockIco"),
@@ -5400,6 +5479,12 @@ function loadLocks() {
   let t = null;
   try { t = JSON.parse(lsGet(LOCKKEY) || "null"); } catch (e) { t = null; }
   if (!t || typeof t !== "object" || Array.isArray(t)) t = {};
+  const legacyFactory = LOCKABLE.every(id => {
+    const row = t[id], shipped = PRELOCKS[id];
+    return row && row.locked !== false && row.salt === shipped.salt && row.hash === shipped.hash
+      && String(row.val) === String(LEGACY_FACTORY_LOCK_VALUES[id]);
+  });
+  if (legacyFactory) { t = {}; lsSet(LOCKKEY, "{}"); }
   locks = {};
   for (const id of LOCKABLE) {
     /* whatever is stored for a field wins, even a record with no password —
@@ -5602,7 +5687,7 @@ function applyHash() {
   return true;
 }
 loadLocks();
-if (!applyHash()) loadPreset("v8cross");
+if (!applyHash()) loadPreset("f6");
 booted = true;
 lockUI();
 syncPanel(); applyConfig();
