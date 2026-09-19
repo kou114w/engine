@@ -2417,14 +2417,14 @@ class EngineSim {
    Config, presets
    ============================================================ */
 const DEFAULT = {
-  n: 6, layout: "B", bankAngle: 180, crank: "even", merge: false,
-  bore: 102, stroke: 81.5, rodRatio: 1.9, cr: 13.2,
-  cam: 0.50, portIn: 2000, portEx: 3200, advance: 25, runner: 0.23, unequal: 0.055,
-  redline: 9000, idle: 980, inertia: 0.17,
-  header: 0.48, collector: 0.92, muffler: 0.16,
+  n: 2, layout: "I", bankAngle: 0, crank: "270", merge: false,
+  bore: 88, stroke: 78, rodRatio: 1.8, cr: 11.5,
+  cam: 0.36, portIn: 1250, portEx: 1900, advance: 22, runner: 0.24, unequal: 0.04,
+  redline: 9000, idle: 1150, inertia: 0.13,
+  header: 0.45, collector: 1.0, muffler: 0.30,
   volume: 0.75, room: 0.18,
-  tone: 0.82, body: 0.42, intakeMix: 0.65,
-  afr: 12.9, chamber: 1
+  tone: 0.46, body: 0.24, intakeMix: 0.42,
+  afr: 13.2, chamber: 1
 };
 
 const PRESETS = {
@@ -5425,26 +5425,28 @@ const LOCKKEY = "cc.itemlocks";
    is unlocked (or its password deleted) that choice is stored and this default
    is not consulted for it again. */
 const PRELOCKS = {
-  "preset":    { salt: "f31bf58fe2cf", hash: "10ywx8a", val: "f6", locked: true },
-  "disp":      { salt: "5558cf96812c", hash: "moptlq",  val: 4,    locked: true },
-  "n":         { salt: "d6a2828061ce", hash: "149n90j", val: 6,    locked: true },
-  "layout":    { salt: "30ab2a3aa930", hash: "111k01h", val: "B",  locked: true },
-  "bankAngle": { salt: "b24e1dee113e", hash: "zi9fzh",  val: 180,  locked: true },
-  "cr":        { salt: "9b478fb42ee1", hash: "b781ky",  val: 13.2, locked: true },
+  "preset":    { salt: "f31bf58fe2cf", hash: "10ywx8a", val: "twin270", locked: true },
+  "disp":      { salt: "5558cf96812c", hash: "moptlq",  val: 0.95, locked: true },
+  "n":         { salt: "d6a2828061ce", hash: "149n90j", val: 2,    locked: true },
+  "layout":    { salt: "30ab2a3aa930", hash: "111k01h", val: "I",  locked: true },
+  "bankAngle": { salt: "b24e1dee113e", hash: "zi9fzh",  val: 0,    locked: true },
+  "cr":        { salt: "9b478fb42ee1", hash: "b781ky",  val: 11.5, locked: true },
   "chamber":   { salt: "731ed5a2ede0", hash: "15e8w1l", val: 1,    locked: true },
-  "portIn":    { salt: "6738c3b299a5", hash: "6amo5t",  val: 2000, locked: true },
-  "cam":       { salt: "4304f643c3fb", hash: "yh20j3",  val: 0.5,  locked: true },
-  "afr":       { salt: "af3641d98947", hash: "1fkz7ui", val: 12.9, locked: true },
-  "advance":   { salt: "11a64c03d35e", hash: "5mn7so",  val: 25,   locked: true }
+  "portIn":    { salt: "6738c3b299a5", hash: "6amo5t",  val: 1250, locked: true },
+  "cam":       { salt: "4304f643c3fb", hash: "yh20j3",  val: 0.36, locked: true },
+  "afr":       { salt: "af3641d98947", hash: "1fkz7ui", val: 13.2, locked: true },
+  "advance":   { salt: "11a64c03d35e", hash: "5mn7so",  val: 22,   locked: true }
 };
 
-/* Upgrade only the untouched factory V8 lock set. Any field the owner changed,
-   unlocked or relocked makes the fingerprint differ, so personal locks are
-   never replaced by this sound update. */
-const LEGACY_FACTORY_LOCK_VALUES = {
-  preset: "v8cross", disp: 5, n: 8, layout: "V", bankAngle: 90,
-  cr: 10.5, chamber: 1, portIn: 1000, cam: 0.4, afr: 13.2, advance: 20
-};
+/* Upgrade only untouched factory lock sets from earlier releases. Any field
+   the owner changed, unlocked or relocked makes the fingerprint differ, so
+   personal locks are never replaced when the starting engine changes. */
+const LEGACY_FACTORY_LOCK_SETS = [
+  { preset: "v8cross", disp: 5, n: 8, layout: "V", bankAngle: 90,
+    cr: 10.5, chamber: 1, portIn: 1000, cam: 0.4, afr: 13.2, advance: 20 },
+  { preset: "f6", disp: 4, n: 6, layout: "B", bankAngle: 180,
+    cr: 13.2, chamber: 1, portIn: 2000, cam: 0.5, afr: 12.9, advance: 25 }
+];
 
 const lockBar = document.getElementById("lockBar"), lockIco = document.getElementById("lockIco"),
   lockTxt = document.getElementById("lockTxt"), lockMsg = document.getElementById("lockMsg"),
@@ -5479,11 +5481,11 @@ function loadLocks() {
   let t = null;
   try { t = JSON.parse(lsGet(LOCKKEY) || "null"); } catch (e) { t = null; }
   if (!t || typeof t !== "object" || Array.isArray(t)) t = {};
-  const legacyFactory = LOCKABLE.every(id => {
+  const legacyFactory = LEGACY_FACTORY_LOCK_SETS.some(values => LOCKABLE.every(id => {
     const row = t[id], shipped = PRELOCKS[id];
     return row && row.locked !== false && row.salt === shipped.salt && row.hash === shipped.hash
-      && String(row.val) === String(LEGACY_FACTORY_LOCK_VALUES[id]);
-  });
+      && String(row.val) === String(values[id]);
+  }));
   if (legacyFactory) { t = {}; lsSet(LOCKKEY, "{}"); }
   locks = {};
   for (const id of LOCKABLE) {
@@ -5687,7 +5689,7 @@ function applyHash() {
   return true;
 }
 loadLocks();
-if (!applyHash()) loadPreset("f6");
+if (!applyHash()) loadPreset("twin270");
 booted = true;
 lockUI();
 syncPanel(); applyConfig();
