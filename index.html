@@ -472,7 +472,10 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
               <select id="laneCount" aria-label="走る台数">
                 <option value="2">2台</option><option value="3">3台</option>
                 <option value="4">4台</option><option value="5">5台</option>
-                <option value="6">6台</option>
+                <option value="6">6台</option><option value="7">7台</option>
+                <option value="8">8台</option><option value="9">9台</option>
+                <option value="10">10台</option><option value="11">11台</option>
+                <option value="12">12台</option><option value="13">13台</option>
               </select></label>
             <label class="ctl"><div class="row"><span class="lab">車両<small>Chassis</small></span></div>
               <select id="vehSel"></select></label>
@@ -2582,9 +2585,9 @@ function raceRun(cfg, veh, opts) {
   let sinceShift = 9;                      // a gearbox does not hunt, so neither does this
   let matchRatio = 1;
   const N = Math.round(maxT * sr);
-  /* long courses keep their audio at half rate: the physics still runs at the
-     full rate, only the recording is thinned, so six cars still fit in memory */
-  const dec = target > 900 ? 2 : 1;
+  /* Long courses record every other physics sample. Even a thirteen-car field
+     keeps an 11 kHz soundtrack while cutting its largest memory block in half. */
+  const dec = target > 900 && sr >= 20000 ? 2 : 1;
   const arate = sr / dec;
   let audio = new Float32Array(Math.round(clamp(target / 18 + 14, 18, maxT) * arate));
   let ai = 0;
@@ -4535,7 +4538,10 @@ const lanesBox = document.getElementById("lanes"), laneCountSel = document.getEl
   raceMsg = document.getElementById("raceMsg"), raceInfo = document.getElementById("raceInfo"),
   raceResult = document.getElementById("raceResult");
 
-const LANE_COL = ["#FF6A13", "#3FB6C4", "#FFC24B", "#4ADE80", "#A98BFF", "#FF7AA2"];
+const MAX_RACE_ENTRIES = 13;
+const RACE_KEYS = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"];
+const LANE_COL = ["#FF6A13", "#3FB6C4", "#FFC24B", "#4ADE80", "#A98BFF", "#FF7AA2",
+  "#4C9BFF", "#FF4D4D", "#A3E635", "#2DD4BF", "#F59E0B", "#C4B5FD", "#FB7185"];
 const laneName = i => (i + 1) + "台目";
 const laneOptions = '<option value="__cur">いまのエンジン</option>'
   + '<option value="__code">8桁の番号 / コード（下の欄）</option>'
@@ -4602,13 +4608,14 @@ function engineSpec(c) {
   const spec = {
     line1: describeCfg(c) + " · " + c.bore.toFixed(1) + "×" + c.stroke.toFixed(1) + "mm · "
       + c.cr.toFixed(1) + ":1 · " + Math.round(c.redline).toLocaleString() + " rpm",
-    power: null
+    power: null, pending: false
   };
   specCache[key] = spec;
   return spec;
 }
 function fillPower(spec, c, el) {
-  if (spec.power !== null) return;
+  if (spec.power !== null || spec.pending) return;
+  spec.pending = true;
   setTimeout(() => {
     let d = null;
     try { d = runDyno(c); } catch (e) { d = null; }
@@ -4616,6 +4623,7 @@ function fillPower(spec, c, el) {
       ? "推定 " + Math.round(d.peakP.v) + " PS / " + Math.round(d.peakP.rpm).toLocaleString() + "rpm　"
         + Math.round(d.peakT.v) + " N·m / " + Math.round(d.peakT.rpm).toLocaleString() + "rpm"
       : "";
+    spec.pending = false;
     if (el.dataset.key === encodeCfg(c)) renderLaneInfo(el, spec, el.dataset.who || "");
   }, 60);
 }
@@ -4644,7 +4652,8 @@ async function updateLaneInfo(L) {
     const spec = engineSpec(c);
     el.dataset.key = encodeCfg(c);
     el.dataset.who = laneLabel(L.name);
-    renderLaneInfo(el, spec, el.dataset.who); fillPower(spec, c, el);
+    renderLaneInfo(el, spec, el.dataset.who);
+    if (lanes.length <= 4) fillPower(spec, c, el);
     return;
   }
   const raw = String(L.input.value || "").trim(), d = digitsOf(raw);
@@ -4657,7 +4666,8 @@ async function updateLaneInfo(L) {
     const spec = engineSpec(r.cfg);
     el.dataset.key = encodeCfg(r.cfg);
     el.dataset.who = laneLabel(L.name);
-    renderLaneInfo(el, spec, el.dataset.who); fillPower(spec, r.cfg, el);
+    renderLaneInfo(el, spec, el.dataset.who);
+    if (lanes.length <= 4) fillPower(spec, r.cfg, el);
     return;
   }
   if (/^E[0-9]-/i.test(raw)) {
@@ -4666,7 +4676,8 @@ async function updateLaneInfo(L) {
     const spec = engineSpec(c);
     el.dataset.key = encodeCfg(c);
     el.dataset.who = laneLabel(L.name);
-    renderLaneInfo(el, spec, el.dataset.who); fillPower(spec, c, el);
+    renderLaneInfo(el, spec, el.dataset.who);
+    if (lanes.length <= 4) fillPower(spec, c, el);
     return;
   }
   laneNote(el, d.length ? "8桁で入力してください（いま " + d.length + " 桁）" : "", d.length > 0);
@@ -4679,6 +4690,7 @@ function laneChanged(i, wait) {
 
 /* ---- build however many lanes were asked for, keeping what was typed ---- */
 function buildLanes(n) {
+  n = clamp(Math.round(n) || 2, 2, MAX_RACE_ENTRIES);
   const prev = lanes.map(L => ({ sel: L.sel.value, val: L.input.value, nm: L.name.value }));
   lanesBox.innerHTML = "";
   lanes = [];
@@ -4734,6 +4746,8 @@ function buildLanes(n) {
       laneChanged(i, 450);
     });
   }
+  const raceCanvas = document.getElementById("race");
+  if (raceCanvas) raceCanvas.style.aspectRatio = n >= 9 ? "16 / 11" : n >= 5 ? "16 / 7.5" : "16 / 6.2";
   for (let i = 0; i < n; i++) laneChanged(i, 0);
 }
 laneCountSel.addEventListener("change", () => buildLanes(+laneCountSel.value));
@@ -4752,11 +4766,20 @@ async function startRace() {
   }
   const veh = VEHICLES[vehSel.value], cs = courseOf(courseSel.value);
   btnRace.textContent = "計測中…";
-  sayRace(entries.length + "台を走らせています…", "");
+  const raceSr = entries.length >= 9 ? 22050 : entries.length >= 5 ? 24000 : 44100;
+  sayRace(entries.length + "台を走らせています… 0 / " + entries.length, "");
   await new Promise(r => setTimeout(r, 40));
   const runs = [];
+  const runCache = Object.create(null);
   try {
-    for (const e of entries) runs.push(raceRun(e.cfg, veh, { course: cs }));
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i], key = encodeCfg(e.cfg);
+      const run = runCache[key] || (runCache[key] = raceRun(e.cfg, veh, { course: cs, sr: raceSr }));
+      runs.push(run);
+      sayRace(entries.length + "台を走らせています… " + (i + 1) + " / " + entries.length, "");
+      /* Let the browser paint progress and answer the OS between cars. */
+      await new Promise(r => setTimeout(r, 0));
+    }
   } catch (err) {
     btnRace.disabled = false; btnRace.textContent = "レース開始";
     sayRace("計測できませんでした。", "bad"); return;
@@ -4766,6 +4789,7 @@ async function startRace() {
     baseNames: entries.map((e, i) => e.base || laneName(i)),
     veh, cs, target: cs.total,
     dur: Math.max.apply(null, runs.map((r, i) => r.len / r.sr)),
+    sampleRate: runs[0].sr, audioBuf: null,
     t0: 0, playing: false, src: null, revealed: false
   };
   btnRace.disabled = false; btnRace.textContent = "レース開始";
@@ -4788,26 +4812,37 @@ async function playRace() {
   if (!ok) { race.t0 = performance.now() / 1000; race.playing = true; race.clock = "perf"; return; }
   const wasRunning = running;
   running = false;
-  const sr = ctx.sampleRate, step = race.runs[0].sr / sr;
-  const outN = Math.max(1, Math.ceil(Math.max.apply(null, race.runs.map(r => r.len)) / step));
-  let buf;
-  try { buf = ctx.createBuffer(2, outN, sr); }
-  catch (err) { race.t0 = performance.now() / 1000; race.playing = true; race.clock = "perf"; return; }
-  const L = buf.getChannelData(0), R = buf.getChannelData(1);
-  const n = race.runs.length, spread = 1 / Math.sqrt(n);
-  const pick = (arr, len, x) => {
-    const j = x | 0; if (j >= len) return 0;
-    const f = x - j, b = j + 1 < len ? arr[j + 1] : arr[j];
-    return arr[j] * (1 - f) + b * f;
-  };
-  for (let k = 0; k < n; k++) {
-    const run = race.runs[k], au = run.audio, len = run.len;
-    const pan = n === 1 ? 0.5 : 0.15 + 0.7 * (k / (n - 1));
-    const gl = (1 - pan) * 1.6 * spread, gr = pan * 1.6 * spread;
-    for (let i = 0; i < outN; i++) {
-      const v = pick(au, len, i * step);
-      L[i] += v * gl; R[i] += v * gr;
+  let buf = race.audioBuf;
+  if (!buf) {
+    /* Keep the mix at the race sample rate.  AudioBuffer performs the final
+       device-rate conversion, avoiding a second 44.1 kHz copy of a long
+       thirteen-car race. */
+    const mixSr = race.sampleRate || race.runs[0].sr;
+    const outN = Math.max(1, Math.ceil(Math.max.apply(null, race.runs.map(r => r.len * mixSr / r.sr))));
+    try { buf = ctx.createBuffer(2, outN, mixSr); }
+    catch (err) { race.t0 = performance.now() / 1000; race.playing = true; race.clock = "perf"; return; }
+    const L = buf.getChannelData(0), R = buf.getChannelData(1);
+    const n = race.runs.length, spread = 1 / Math.sqrt(n);
+    const pick = (arr, len, x) => {
+      const j = x | 0; if (j >= len) return 0;
+      const f = x - j, b = j + 1 < len ? arr[j + 1] : arr[j];
+      return arr[j] * (1 - f) + b * f;
+    };
+    for (let k = 0; k < n; k++) {
+      const run = race.runs[k], au = run.audio, len = run.len;
+      if (!au) continue;
+      const step = run.sr / mixSr;
+      const pan = n === 1 ? 0.5 : 0.08 + 0.84 * (k / (n - 1));
+      const gl = (1 - pan) * 1.6 * spread, gr = pan * 1.6 * spread;
+      for (let i = 0; i < outN; i++) {
+        const v = pick(au, len, i * step);
+        L[i] += v * gl; R[i] += v * gr;
+      }
     }
+    race.audioBuf = buf;
+    /* The stereo mix is enough for replay. Drop every per-car recording; a
+       duplicated run object is harmless because all mixing is already done. */
+    for (const run of race.runs) run.audio = null;
   }
   const src = ctx.createBufferSource();
   src.buffer = buf;
@@ -4965,7 +5000,7 @@ function drawRaceMap(g, w, h, tt) {
   g.font = "500 9px 'IBM Plex Mono',monospace"; g.fillStyle = "#5D6875";
   g.fillText("T+" + Math.min(tt, race.dur).toFixed(2) + "s", lx0, 14);
   g.fillText(cs.name.replace(/（.*$/, "").trim(), lx0, 26);
-  const rowH = Math.min(30, Math.max(19, (h - 44) / n));
+  const rowH = Math.min(30, Math.max(14, (h - 44) / n));
   for (let q = 0; q < n; q++) {
     const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
     const y = 42 + q * rowH;
@@ -5006,9 +5041,9 @@ function drawRace() {
 
   const padL = 54, padR = 16, top = 15;
   const trackW = w - padL - padR;
-  const gap = n > 4 ? 5 : 8;
-  const bandH = Math.max(40, h * (n > 3 ? 0.62 : 0.5));
-  const laneH = Math.max(15, Math.min(34, (bandH - gap * (n - 1)) / n));
+  const gap = n >= 9 ? 3 : n > 4 ? 5 : 8;
+  const bandH = n >= 9 ? Math.max(80, h - 64) : Math.max(40, h * (n > 3 ? 0.62 : 0.5));
+  const laneH = Math.max(11, Math.min(34, (bandH - gap * (n - 1)) / n));
   const X = d => padL + Math.min(1, d / race.target) * trackW;
 
   for (let k = 0; k < n; k++) {
@@ -5120,8 +5155,7 @@ btnRaceLink.addEventListener("click", async () => {
     if (r.err) { sayRace(r.err, "bad"); return; }
     parts.push(encodeCfg(r.cfg));
   }
-  const keys = ["a", "b", "c", "d", "e", "f"];
-  const url = location.href.split("#")[0] + "#" + parts.map((p, i) => keys[i] + "=" + p).join("&");
+  const url = location.href.split("#")[0] + "#" + parts.map((p, i) => RACE_KEYS[i] + "=" + p).join("&");
   const ok = await copyVia(codeIn, url);
   sayRace(ok ? "対戦リンクをコピーしました。開いた人は同じ組み合わせで走らせられます。"
              : "自動コピーできませんでした。上の共有欄にURLを出したので選択してコピーしてください。", ok ? "ok" : "bad");
@@ -5157,7 +5191,7 @@ function showRacePanel(scroll) {
     btnGoRace.hidden = false;
     /* build from the picker, not from whatever is lying around: a browser that
        restores form state on reload can leave the two out of step */
-    buildLanes(clamp(Math.round(+laneCountSel.value) || 2, 2, 6));
+    buildLanes(clamp(Math.round(+laneCountSel.value) || 2, 2, MAX_RACE_ENTRIES));
   }
   if (!scroll) return;
   panel.classList.remove("collapsed");
@@ -5730,8 +5764,7 @@ function hashParams() {
 }
 function applyHash() {
   const hp = hashParams();
-  const keys = ["a", "b", "c", "d", "e", "f"];
-  const cfgs = keys.map(k => (hp[k] ? decodeCfg(hp[k]) : null));
+  const cfgs = RACE_KEYS.map(k => (hp[k] ? decodeCfg(hp[k]) : null));
   const count = cfgs.reduce((n, c, i) => c ? i + 1 : n, 0);
   if (!count) return false;
   if (cfgs[0]) {
@@ -5740,7 +5773,7 @@ function applyHash() {
   }
   if (count > 1) {
     showRacePanel(false);              // a battle link is an explicit request
-    const n = Math.max(2, Math.min(6, count));
+    const n = Math.max(2, Math.min(MAX_RACE_ENTRIES, count));
     laneCountSel.value = String(n);
     buildLanes(n);
     for (let i = 0; i < n; i++) {
