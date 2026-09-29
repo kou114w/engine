@@ -515,7 +515,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           <p><b>3 · 排気管の音響</b> — 排気弁から出た圧力パルスをデジタル導波路（進行波・後退波の遅延線）に注入し、集合部の散乱接合と管端反射を解いています。管長を変えると脈動が変わり、音色と充填効率の両方が動きます。</p>
           <p><b>4 · 使い方</b> — 「エンジン始動」でセルが回ります。スロットルバーを押さえて（PC では <kbd>Space</kbd> でも）吹かせます。「ダイナモ計測」は同じ物理モデルを高速で回してトルク・出力曲線を出します。</p>
           <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、クランクにかかる負荷と慣性としてエンジンに返るので、トルクの出方や許容回転数がそのままタイムに出ます。音も両車ぶんを実際に合成して左右に振っています。</p>
-          <p><b>6 · 共有</b> — 「コードをコピー」で組んだ仕様がそのまま文字列になります。「番号を発行」を押すと8桁の合言葉になり、相手がそれを入れると同じエンジンが立ち上がります。番号は共有先を指す鍵なので、共有ストアのない環境では「番号を書き出し」でファイルとして渡してください。</p>
+          <p><b>6 · 共有</b> — 「コードをコピー」で組んだ細かな仕様がそのまま文字列になります。「番号を発行」を押すと、サーバーなしで別のスマホやPCでも読める8桁の合言葉になります。8桁版は主要設定を段階値に圧縮し、E4コードとURLは全設定を正確に保持します。</p>
           <p><b>7 · スマホでは</b> — パネル見出しをタップで開閉、下端の「負荷・保持」で負荷・Dyno hold・スロットル保持が出ます。スロットル保持を入れると指を離しても開度が残るので、片手で音の変化を追えます。音が出ないときは端末のマナーモードを確認してください。</p>
           <p style="margin-top:12px;color:#5D6875">着想元は AngeTheGreat の <a href="https://www.engine-sim.parts/" target="_blank" rel="noopener" style="color:#7C8896">engine-sim.parts</a>。あちらと同じく、これは音とレスポンスの再現を目的としたモデルで、エンジン設計の数値保証をするものではありません。</p>
         </div>
@@ -4209,12 +4209,77 @@ function showNumber(n) {
   btnNumCopy.hidden = false;
 }
 
-/* Eight digits carry about 26 bits; one engine needs roughly 110 at these
-   step sizes, so the number can only ever be a KEY to a stored engine, never
-   the engine itself. With the shared store it reaches anyone with the link.
-   Without it the key still works, but only where the entry exists: this
-   browser, and any number file exported from it. */
+/* A full E4 build does not fit into eight decimal digits.  The public build
+   therefore also has a compact, self-contained form: codes beginning with 9
+   carry the ten visible engine choices at carefully chosen coarse steps.  The
+   exact build is still remembered on the issuing browser, while another phone
+   or PC can reconstruct the compact build from the eight digits alone. */
 const NUMS = "cc.numbers";
+const COMPACT_MAGIC = 90000000;
+const COMPACT_RADIX = [12, 5, 16, 8, 4, 3, 3, 3, 3];
+const COMPACT_PORT = [650, 1250, 2300];
+const COMPACT_CAM = [0.20, 0.36, 0.68];
+const COMPACT_AFR = [12.4, 13.2, 15.2];
+const COMPACT_ADV = [14, 22, 32];
+const COMPACT_BANK = [45, 60, 90];
+
+function nearestIndex(a, v) {
+  let best = 0;
+  for (let i = 1; i < a.length; i++) if (Math.abs(a[i] - v) < Math.abs(a[best] - v)) best = i;
+  return best;
+}
+function compactCheck(x) {
+  let v = x >>> 0;
+  v ^= v >>> 16; v ^= v >>> 8; v ^= v >>> 4;
+  return Math.imul(v ^ (v >>> 7), 0x45d9f3b) >>> 0 & 3;
+}
+function compactNumberEncode(c) {
+  const disp = clamp(dispOf(c), 0.4, 8);
+  const arch = c.layout === "I" ? 0 : c.layout === "B" ? 1 : 2 + nearestIndex(COMPACT_BANK, c.bankAngle);
+  const vals = [
+    clamp(Math.round(c.n), 1, 12) - 1,
+    arch,
+    clamp(Math.round((disp - 0.4) / (7.6 / 15)), 0, 15),
+    clamp(Math.round((clamp(c.cr, 6, 16) - 6) / (10 / 7)), 0, 7),
+    clamp(Math.round(c.chamber || 0), 0, 3),
+    nearestIndex(COMPACT_PORT, c.portIn), nearestIndex(COMPACT_CAM, c.cam),
+    nearestIndex(COMPACT_AFR, c.afr), nearestIndex(COMPACT_ADV, c.advance)
+  ];
+  let payload = 0, mul = 1;
+  for (let i = 0; i < vals.length; i++) { payload += vals[i] * mul; mul *= COMPACT_RADIX[i]; }
+  return String(COMPACT_MAGIC + payload * 4 + compactCheck(payload));
+}
+function compactNumberDecode(number) {
+  if (!/^9[0-9]{7}$/.test(String(number || ""))) return null;
+  const raw = Number(number) - COMPACT_MAGIC;
+  if (raw < 0) return null;
+  let payload = Math.floor(raw / 4), total = 1;
+  for (const r of COMPACT_RADIX) total *= r;
+  if (payload >= total || (raw & 3) !== compactCheck(payload)) return null;
+  const v = [];
+  for (const r of COMPACT_RADIX) { v.push(payload % r); payload = Math.floor(payload / r); }
+
+  const c = Object.assign({}, DEFAULT);
+  c.n = v[0] + 1;
+  c.layout = v[1] === 0 ? "I" : v[1] === 1 ? "B" : "V";
+  c.bankAngle = c.layout === "I" ? 0 : c.layout === "B" ? 180 : COMPACT_BANK[v[1] - 2];
+  c.cr = +(6 + v[3] * (10 / 7)).toFixed(1);
+  c.chamber = v[4]; c.portIn = COMPACT_PORT[v[5]]; c.cam = COMPACT_CAM[v[6]];
+  c.afr = COMPACT_AFR[v[7]]; c.advance = COMPACT_ADV[v[8]];
+  c.crank = c.n === 2 ? "270" : (c.n === 8 && c.layout !== "I" ? "cross" : crankOptions(c.n, c.layout)[0][0]);
+
+  /* Rebuild bore and stroke from the compact displacement.  The ratio follows
+     the architecture, keeping twins lively and boxers oversquare. */
+  const want = 0.4 + v[2] * (7.6 / 15);
+  const ratio = c.layout === "B" ? 1.22 : c.layout === "V" ? 1.06 : c.n <= 2 ? 1.13 : 1.0;
+  const stroke = Math.cbrt(4 * (want * 1e6 / c.n) / (Math.PI * ratio * ratio));
+  c.stroke = clamp(+stroke.toFixed(1), 30, 140);
+  c.bore = clamp(+(ratio * c.stroke).toFixed(1), 40, 150);
+  c.redline = clamp(Math.round((24 * 60 / (2 * c.stroke / 1000)) / 100) * 100, 4000, 12000);
+  c.inertia = clamp(+(0.10 + c.n * 0.014 + want * 0.025).toFixed(3), 0.13, 0.9);
+  c.portEx = clamp(Math.round(c.portIn * 1.6), 600, 3200);
+  return c;
+}
 function numTable() {
   let t = null;
   try { t = JSON.parse(lsGet(NUMS) || "{}"); } catch (e) { t = null; }
@@ -4241,18 +4306,15 @@ async function issueNumber() {
   btnIssue.disabled = true;
   say("番号を用意しています…", "");
   const payload = { code: encodeCfg(cfg), engine: describeCfg(cfg), at: Date.now() };
-  const draw = () => String(Math.floor(10000000 + Math.random() * 90000000));
+  /* 90xxxxxx–99xxxxxx is reserved for the self-contained public format. */
+  const draw = () => String(Math.floor(10000000 + Math.random() * 80000000));
 
   if (!db) {
-    /* no shared store: the number still names this engine, but only here and
-       in a number file exported from this browser */
-    const taken = numTable();
-    let n = draw();
-    for (let k = 0; k < 6 && taken[n]; k++) n = draw();
+    const n = compactNumberEncode(cfg);
     numRemember(n, payload);
     showNumber(n);
     btnIssue.disabled = false;
-    say("番号を発行しました。この端末では使えます。相手に渡すには「番号を書き出し」でファイルを渡すか、上の E4- コードを送ってください。", "ok");
+    say("番号を発行しました。この8桁だけで、別のスマホやPCからも読み込めます。完全に同じ細かな値を渡す場合はE4コードかURLを使ってください。", "ok");
     return;
   }
   for (let k = 0; k < 6; k++) {
@@ -4277,13 +4339,18 @@ async function lookupNumber(n) {
   if (local) return { cfg: local };
   const db = await dbReady;
   if (!db) {
-    return { err: "その番号はこの端末にありません。番号は共有ストアの鍵なので、"
-      + "配布版では「番号を読み込み」でファイルを取り込むか、E4- コードを使ってください。" };
+    const compact = compactNumberDecode(n);
+    return compact ? { cfg: compact, compact: true }
+      : { err: "その番号は見つかりません。数字8桁を確かめてください。以前の端末専用番号なら、書き出した garage.json の取り込みが必要です。" };
   }
   let snap;
   try { snap = await db.doc("codes/" + n).get(); }
   catch (e) { return { err: "番号を照会できませんでした。" }; }
-  if (!snap.exists) return { err: "その番号は見つかりません。桁を確かめてください。" };
+  if (!snap.exists) {
+    const compact = compactNumberDecode(n);
+    return compact ? { cfg: compact, compact: true }
+      : { err: "その番号は見つかりません。桁を確かめてください。" };
+  }
   const row = snap.data() || {};
   const c = decodeCfg(row.code);
   if (!c) return { err: "その番号の中身を読み取れませんでした。" };
@@ -4311,8 +4378,11 @@ function adoptCfg(c) {
    lock has one place to stand rather than one guard per button */
 function applyLoaded(c) {
   const pinned = PINNED.filter(isItemLocked).length;
+  if (pinned) {
+    sayLock("番号やコードを読み込むには、先にロック中の " + pinned + " 項目をそれぞれ解除してください。", "bad");
+    return false;
+  }
   adoptCfg(c);
-  if (pinned) sayLock(pinned + " 項目はロック中なので、読み込んだ値ではなくロックした値のままです。", "");
   return true;
 }
 
@@ -4322,13 +4392,13 @@ btnLoadCode.addEventListener("click", async () => {
     say("番号を照会しています…", "");
     const r = await lookupNumber(d);
     if (!r.cfg) { say(r.err, "bad"); return; }
-    if (!applyLoaded(r.cfg)) return;
-    say(describeCfg(r.cfg) + " を読み込みました。", "ok");
+    if (!applyLoaded(r.cfg)) { say("番号は確認できましたが、設定項目がロック中です。錠前を解除してからもう一度読み込んでください。", "bad"); return; }
+    say(describeCfg(r.cfg) + (r.compact ? " を8桁番号から復元しました。" : " を読み込みました。"), "ok");
     return;
   }
   const c = decodeCfg(raw);
   if (!c) { say("8桁の番号か、E4- で始まるコードを入れてください。", "bad"); return; }
-  if (!applyLoaded(c)) return;
+  if (!applyLoaded(c)) { say("コードは確認できましたが、設定項目がロック中です。錠前を解除してからもう一度読み込んでください。", "bad"); return; }
   say(describeCfg(c) + " を読み込みました。", "ok");
 });
 codeIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); btnLoadCode.click(); } });
@@ -4337,10 +4407,8 @@ codeIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefa
 if (window.top === window.self && /^https?:$/.test(location.protocol)) btnCopyUrl.hidden = false;
 
 /* ---------- the number, and how it travels ----------
-   Eight digits are a key into a store, never the engine itself. Inside the
-   artifact viewer that store is shared, so a number reaches anyone with the
-   link. Opened from disk there is no store, so the same table lives in this
-   browser and travels to a friend as a small file. */
+   New 9-prefixed numbers are self-contained and travel without a server.
+   The local table and imports remain for older exact stored numbers. */
 const numState = document.getElementById("numState"),
   btnNumExport = document.getElementById("btnNumExport"),
   btnNumImport = document.getElementById("btnNumImport"),
@@ -4368,7 +4436,7 @@ function takeNumbers(map) {
 async function initNumbers() {
   const db = await dbReady;
   if (db) { numState.textContent = "リンクを開いた全員で共有"; return; }
-  numState.textContent = "この端末内 · ファイルで交換";
+  numState.textContent = "9で始まる番号はサーバー不要 · どの端末でも読込可能";
   btnNumExport.hidden = false; btnNumImport.hidden = false;
   if (!lsSet("cc.probe", "1")) {
     say("このブラウザは保存を許可していないので、発行した番号はタブを閉じると消えます。書き出しておいてください。", "bad");
@@ -5212,7 +5280,7 @@ async function loadPublicGarage() {
     .filter(r => garageEntry(r))
     .map(r => Object.assign({}, r, { pub: true }));
   const nums = takeNumbers(data && data.numbers);
-  if (nums) numState.textContent = "公開ボードの番号 " + nums + " 件 + この端末内";
+  if (nums) numState.textContent = "9で始まる番号は全端末対応 · 旧公開番号 " + nums + " 件";
   if (publicRows.length || nums) {
     garageState.textContent = "公開ボード（" + publicRows.length + "台"
       + (nums ? " / 番号" + nums + "件" : "") + "） + このパソコン内";
@@ -5667,8 +5735,8 @@ function applyHash() {
   const count = cfgs.reduce((n, c, i) => c ? i + 1 : n, 0);
   if (!count) return false;
   if (cfgs[0]) {
-    applyLoaded(cfgs[0]);
-    say(describeCfg(cfgs[0]) + " をURLから読み込みました。", "ok");
+    if (applyLoaded(cfgs[0])) say(describeCfg(cfgs[0]) + " をURLから読み込みました。", "ok");
+    else say("URLは読めましたが、設定項目がロック中です。錠前を解除してから開き直してください。", "bad");
   }
   if (count > 1) {
     showRacePanel(false);              // a battle link is an explicit request
