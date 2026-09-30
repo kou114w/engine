@@ -5145,26 +5145,40 @@ function drawRaceMap(g, w, h, tt) {
 
   /* the cars */
   const nameplates = [];
+  function drawCarArrow(p) {
+    g.save();
+    g.translate(p.cx, p.cy); g.rotate(p.ang);
+    /* Draw the direction marker after the labels, with a dark halo and a
+       light keyline. This keeps it visible when a phone clamps a nameplate
+       against the edge of the map. */
+    g.shadowColor = p.col; g.shadowBlur = 5;
+    g.beginPath();
+    g.moveTo(p.r, 0); g.lineTo(-p.r * 0.85, -p.r * 0.72);
+    g.lineTo(-p.r * 0.45, 0); g.lineTo(-p.r * 0.85, p.r * 0.72);
+    g.closePath();
+    g.fillStyle = p.col; g.fill();
+    g.shadowBlur = 0;
+    g.strokeStyle = "rgba(5,8,11,.96)"; g.lineWidth = 3.5; g.stroke();
+    g.strokeStyle = "rgba(240,247,252,.92)"; g.lineWidth = 1; g.stroke();
+    g.restore();
+  }
   for (let q = n - 1; q >= 0; q--) {
     const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
     let i = Math.round(Math.min(s.dist, cs.total) / cs.ds);
     if (i < 0) i = 0; if (i > last - 1) i = last - 1;
-    const cx = X(i), cy = Y(i);
     const dx = sh.px[i + 1] - sh.px[i], dy = sh.py[i + 1] - sh.py[i];
     const ang = Math.atan2(dy, dx);
-    const r = Math.max(5, Math.min(9, tw * 0.62));
-    g.save();
-    g.translate(cx, cy); g.rotate(ang);
+    const r = Math.max(compact ? 7 : 6, Math.min(10, tw * 0.68));
+    /* Nearby cars no longer sit on the exact same pixel. A small visual lane
+       offset separates their arrows without changing any race physics. */
+    const slots = Math.min(n, 5), slot = (k % slots) - (slots - 1) / 2;
+    const laneStep = n <= 4 ? r * 1.35 : r * .62;
+    const cx = X(i) - Math.sin(ang) * slot * laneStep;
+    const cy = Y(i) + Math.cos(ang) * slot * laneStep;
     if (s.boost) {
       g.fillStyle = "rgba(255,194,75,.20)";
-      g.beginPath(); g.arc(0, 0, r * 2.2, 0, 7); g.fill();
+      g.beginPath(); g.arc(cx, cy, r * 2.2, 0, 7); g.fill();
     }
-    g.fillStyle = col;
-    g.beginPath();
-    g.moveTo(r, 0); g.lineTo(-r * 0.85, -r * 0.72);
-    g.lineTo(-r * 0.45, 0); g.lineTo(-r * 0.85, r * 0.72);
-    g.closePath(); g.fill();
-    g.restore();
     if (s.spin) {
       g.strokeStyle = "#FFC24B"; g.lineWidth = 1.2;
       g.beginPath(); g.arc(cx, cy, r * 1.9, 0, 7); g.stroke();
@@ -5224,6 +5238,9 @@ function drawRaceMap(g, w, h, tt) {
     g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = p.col;
     g.fillText(lab, best.lx, best.ly + .5);
   }
+  /* Labels and their backgrounds cannot cover the direction arrows. Cars are
+     ordered rear-to-front, so the leader remains the topmost marker. */
+  for (const p of nameplates) drawCarArrow(p);
   g.textBaseline = "alphabetic"; g.textAlign = "left";
 
   /* Compact standings below the map: two columns give every name a fixed row,
