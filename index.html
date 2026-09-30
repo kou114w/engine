@@ -229,6 +229,7 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
   min-height:1.5em;white-space:pre-line}
 .laneinfo b{color:var(--ink-dim);font-weight:500}
 .laneinfo .pw{color:var(--heat)}
+.laneinfo .combo{color:var(--spark)}
 .laneinfo.bad{color:var(--danger)}
 @media (max-width:640px){.racegrid{grid-template-columns:1fr}}
 #race{aspect-ratio:16/6.2;width:100%;display:block}
@@ -243,6 +244,7 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .rescard .who b{color:var(--ok);font-weight:600}
 .rescard .eng{font-size:12.5px;color:var(--ink-dim);margin:3px 0 7px;line-height:1.35}
 .boosttag{display:inline-block;margin-left:7px;color:var(--heat);font:600 9px var(--mono);letter-spacing:.05em}
+.combotag{display:inline-block;margin-left:7px;color:var(--spark);font:600 9px var(--mono);letter-spacing:.05em}
 .strategytag{display:inline-block;margin-left:7px;color:var(--bankb);font:600 9px var(--mono);letter-spacing:.08em}
 .rescard .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .rescard .nums div span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:#5D6875;text-transform:uppercase}
@@ -504,7 +506,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
             <button class="btn-ghost" id="btnRaceReplay" disabled>もう一度再生</button>
             <button class="btn-ghost" id="btnRaceLink" hidden>対戦リンクをコピー</button>
           </div>
-          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。自動ではエンジン特性に合う作戦を選びます。</p>
+          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。圧縮比・燃焼室・吸排気・カム・空燃比・点火時期などの相性が良いエンジンは、セッティングBOOSTも強くなります。</p>
           <p class="sharemsg" id="raceMsg"></p>
 
           <div class="garage" id="garageBox">
@@ -534,7 +536,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           <p><b>2 · クランク動力学</b> — 筒内圧 × dV/dθ を全気筒で合計した図示トルクから、摩擦と負荷を引いて慣性モーメントで回転を進めます。回転数は入力ではなく<b>結果</b>です。</p>
           <p><b>3 · 排気管の音響</b> — 排気弁から出た圧力パルスをデジタル導波路（進行波・後退波の遅延線）に注入し、集合部の散乱接合と管端反射を解いています。管長を変えると脈動が変わり、音色と充填効率の両方が動きます。</p>
           <p><b>4 · 使い方</b> — 「エンジン始動」でセルが回ります。スロットルバーを押さえて（PC では <kbd>Space</kbd> でも）吹かせます。「ダイナモ計測」は同じ物理モデルを高速で回してトルク・出力曲線を出します。</p>
-          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。「リアル」では作戦補助を完全に切れます。</p>
+          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。8項目の組み合わせから「高回転NA・トルクチューン・軽量レスポンス・多気筒ハーモニー」の相性を計算し、相性が良いほどBOOSTの充電と出力が上がります。「リアル」では作戦補助を完全に切れます。</p>
           <p><b>6 · 共有</b> — 「コードをコピー」で組んだ細かな仕様がそのまま文字列になります。番号発行欄で作戦を選んで「番号を発行」を押すと、エンジンと作戦を別のスマホやPCでも読める8桁の合言葉にできます。8桁版は主要設定を段階値に圧縮し、E4コードとURLは全設定を正確に保持します。</p>
           <p><b>7 · スマホでは</b> — パネル見出しをタップで開閉、下端の「負荷・保持」で負荷・Dyno hold・スロットル保持が出ます。スロットル保持を入れると指を離しても開度が残るので、片手で音の変化を追えます。音が出ないときは端末のマナーモードを確認してください。</p>
           <p style="margin-top:12px;color:#5D6875">着想元は AngeTheGreat の <a href="https://www.engine-sim.parts/" target="_blank" rel="noopener" style="color:#7C8896">engine-sim.parts</a>。あちらと同じく、これは音とレスポンスの再現を目的としたモデルで、エンジン設計の数値保証をするものではありません。</p>
@@ -2501,6 +2503,37 @@ function raceStrategy(key, c, comeback) {
   return RACE_STRATEGIES[k] ? k : "stalk";
 }
 
+/* The eight visible engine settings form four useful tuning combinations.
+   The score is continuous: a build does not gain or lose BOOST at one magic
+   slider notch. Per-cylinder displacement and cylinder count cover the size
+   choices; the remaining terms cover compression, chamber, breathing, cam,
+   mixture and ignition. */
+function engineBoostCombo(c) {
+  const near = (x, target, span) => clamp(1 - Math.abs(x - target) / span, 0, 1);
+  const dcyl = dispOf(c) / Math.max(1, c.n);
+  const profiles = [
+    { name: "高回転NA", n: 6, ns: 6, dc: .55, dcs: .30, cr: 12.5, crs: 3, ch: 1,
+      port: 1900, ports: 950, cam: .48, cams: .24, afr: 12.9, afrs: 1.7, adv: 24, advs: 9 },
+    { name: "トルクチューン", n: 6, ns: 6, dc: .72, dcs: .42, cr: 10.5, crs: 3, ch: 2,
+      port: 1250, ports: 850, cam: .34, cams: .20, afr: 13.2, afrs: 1.9, adv: 20, advs: 9 },
+    { name: "軽量レスポンス", n: 3, ns: 3, dc: .45, dcs: .28, cr: 11.5, crs: 3, ch: 1,
+      port: 1300, ports: 750, cam: .38, cams: .20, afr: 12.8, afrs: 1.7, adv: 22, advs: 8 },
+    { name: "多気筒ハーモニー", n: 10, ns: 4, dc: .55, dcs: .30, cr: 12, crs: 3, ch: 1,
+      port: 1750, ports: 900, cam: .40, cams: .22, afr: 13, afrs: 1.7, adv: 22, advs: 8 }
+  ];
+  let best = null;
+  for (const p of profiles) {
+    const chamber = Math.round(c.chamber || 0) === p.ch ? 1 : .25;
+    const score = (.8 * near(c.n, p.n, p.ns) + near(dcyl, p.dc, p.dcs)
+      + near(c.cr, p.cr, p.crs) + .75 * chamber + near(c.portIn, p.port, p.ports)
+      + 1.1 * near(c.cam, p.cam, p.cams) + .9 * near(c.afr || 13.2, p.afr, p.afrs)
+      + .9 * near(c.advance, p.adv, p.advs)) / 7.45;
+    if (!best || score > best.score) best = { name: p.name, score };
+  }
+  best.strength = clamp((best.score - .62) / .28, 0, 1);
+  return best;
+}
+
 /* ============================================================
    Courses
 
@@ -2609,10 +2642,14 @@ function raceRun(cfg, veh, opts) {
   const flow = clamp((cfg.portIn - 200) / 2400, 0, 1);
   const paceIndex = dispL * (0.62 + 0.38 * flow) * Math.sqrt(cfg.redline / 7000);
   const underdog = clamp((4.8 - paceIndex) / 4.3, 0, 1);
-  const boostPowerKw = (28 + 72 * underdog) * strategy.power;
-  const boostMax = (1.8 + 2.2 * underdog) * strategy.cap; // seconds at full deployment
-  let boostEnergy = comeback
-    ? (cs.curved ? 0.25 + 0.45 * underdog : 0.8 + 1.3 * underdog) * strategy.reserve : 0;
+  const combo = engineBoostCombo(cfg), comboStrength = combo.strength;
+  const boostPowerKw = (28 + 72 * underdog) * strategy.power * (1 + .25 * comboStrength);
+  const boostMax = (1.8 + 2.2 * underdog) * strategy.cap * (1 + .22 * comboStrength);
+  let boostEnergy = comeback ? Math.min(boostMax,
+    (cs.curved ? 0.25 + 0.45 * underdog : 0.8 + 1.3 * underdog) * strategy.reserve
+      + (cs.curved ? .35 : .65) * comboStrength * strategy.reserve) : 0;
+  const fullBrakeCharge = underdog >= .24 || strategyKey === "closer" || strategyKey === "deep";
+  const brakeChargeScale = fullBrakeCharge ? 1 : .10 * comboStrength;
   let boost = 0, boostUsed = 0;
   /* a slow car round a twisty course needs a long clock; a drag strip does not */
   const maxT = opts.maxT || clamp(target / 11 + 22, 30, 130);
@@ -2693,7 +2730,8 @@ function raceRun(cfg, veh, opts) {
     e.thrTarget = brake > 0 ? 0 : (progress < strategy.attack ? strategy.throttle : 1);
     if (comeback && brake > 0.04) {
       boostEnergy = Math.min(boostMax,
-        boostEnergy + brake * dt * (0.72 + 0.45 * underdog) * strategy.charge);
+        boostEnergy + brake * dt * (0.72 + 0.45 * underdog) * strategy.charge
+          * (1 + .5 * comboStrength) * brakeChargeScale);
     }
 
     const surf = e.omega * veh.tyre / ratio;          // tyre contact-patch speed
@@ -2713,8 +2751,11 @@ function raceRun(cfg, veh, opts) {
        comeback instead of deciding the launch. */
     boost = 0;
     let Fassist = 0;
-    const boostEligible = underdog >= 0.24 || strategyKey === "closer" || strategyKey === "deep";
-    if (comeback && boostEligible && progress >= strategy.attack && kap < 0.0045 && brake < 0.02 &&
+    const boostEligible = underdog >= 0.24 || comboStrength >= .05
+      || strategyKey === "closer" || strategyKey === "deep";
+    const boostGate = strategyKey === "closer" || strategyKey === "deep"
+      ? strategy.attack : Math.max(strategy.attack, .58 - .08 * comboStrength);
+    if (comeback && boostEligible && progress >= boostGate && kap < 0.0045 && brake < 0.02 &&
         shiftT <= 0 && engage >= 0.9 && v > 10 && boostEnergy > 0.002) {
       const gripRoom = Math.max(0, FxCap - Math.max(0, F));
       Fassist = Math.min(gripRoom, Fmax * 0.28, boostPowerKw * 1000 / Math.max(18, v));
@@ -2774,7 +2815,8 @@ function raceRun(cfg, veh, opts) {
   return { tel, audio, len: ai, sr: arate,
     result: { finish, trap, t60: mark60, t100: mark100, t200: mark200, dist, topGear: gear + 1,
       shiftRpm, launch, vmax: vmaxSeen * 3.6, total: target,
-      boostUsed, underdog, boostPowerKw, comeback, strategy: strategyKey } };
+      boostUsed, underdog, boostPowerKw, comeback, strategy: strategyKey,
+      comboName: combo.name, comboScore: combo.score, comboStrength } };
 }
 let cfg = Object.assign({}, DEFAULT);
 
@@ -4702,9 +4744,11 @@ const specCache = Object.create(null);
 function engineSpec(c) {
   const key = encodeCfg(c);
   if (specCache[key]) return specCache[key];
+  const combo = engineBoostCombo(c);
   const spec = {
     line1: describeCfg(c) + " · " + c.bore.toFixed(1) + "×" + c.stroke.toFixed(1) + "mm · "
       + c.cr.toFixed(1) + ":1 · " + Math.round(c.redline).toLocaleString() + " rpm",
+    combo: "BOOST相性 " + combo.name + " " + Math.round(combo.strength * 100) + "%",
     power: null, pending: false
   };
   specCache[key] = spec;
@@ -4735,6 +4779,11 @@ function renderLaneInfo(el, spec, who) {
     el.appendChild(document.createTextNode("\n"));
     const p = document.createElement("span"); p.className = "pw"; p.textContent = spec.power;
     el.appendChild(p);
+  }
+  if (spec.combo) {
+    el.appendChild(document.createTextNode("\n"));
+    const c = document.createElement("span"); c.className = "combo"; c.textContent = spec.combo;
+    el.appendChild(c);
   }
 }
 function laneNote(el, text, bad) {
@@ -4916,7 +4965,7 @@ async function startRace() {
   btnRaceReplay.disabled = false;
   raceInfo.firstChild.textContent = comeback ? "走行中 · レースバトル" : "走行中";
   sayRace(comeback
-    ? "ブレーキで充電し、終盤の直線でBOOSTを自動使用します。結果は最後に出ます。"
+    ? "ブレーキとエンジン設定の相性で充電し、直線でBOOSTを自動使用します。結果は最後に出ます。"
     : "結果は走り終わってから出ます。", "");
   await playRace();
 }
@@ -4991,6 +5040,9 @@ function revealRace() {
     const res = r.result, win = rank[i] === 0 && res.finish >= 0;
     const strategy = RACE_STRATEGIES[race.strategies[i]] || RACE_STRATEGIES.stalk;
     const strategyTag = race.comeback ? '<em class="strategytag">作戦 ' + strategy.name + '</em>' : '';
+    const comboTag = race.comeback && res.comboStrength >= .05
+      ? '<em class="combotag">⚙ ' + escapeText(res.comboName) + ' '
+        + Math.round(res.comboStrength * 100) + '%</em>' : '';
     const boostTag = race.comeback && res.boostUsed > 0.04
       ? '<em class="boosttag">⚡ BOOST ' + res.boostUsed.toFixed(1) + 's</em>' : '';
     return '<div class="rescard' + (win ? " win" : "") + '">'
@@ -4998,7 +5050,8 @@ function revealRace() {
       + escapeText(race.names[i] || laneName(i)) + '</span>'
       + (res.finish >= 0 ? "<b>" + (win ? "WIN" : (rank[i] + 1) + "位") + "</b>" : "<b>DNF</b>") + '</div>'
       + '<div class="eng">' + escapeText(describeCfg(race.cfgs[i])) + " · "
-      + Math.round(race.cfgs[i].redline).toLocaleString() + ' rpm' + strategyTag + boostTag + '</div>'
+      + Math.round(race.cfgs[i].redline).toLocaleString() + ' rpm'
+      + strategyTag + comboTag + boostTag + '</div>'
       + '<div class="nums">'
       + '<div><span>' + Math.round(race.target) + ' m</span><b>'
       + fmtT(res.finish) + '</b><i>s</i></div>'
