@@ -510,7 +510,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
             <button class="btn-ghost" id="btnRaceReplay" disabled>もう一度再生</button>
             <button class="btn-ghost" id="btnRaceLink" hidden>対戦リンクをコピー</button>
           </div>
-          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。圧縮比・燃焼室・吸排気・カム・空燃比・点火時期などの相性が良いエンジンは、セッティングBOOSTも強くなります。直線性能が高いエンジンほどコーナーで旋回・制動・立ち上がりの負担が増え、未舗装ではさらに不利になります。</p>
+          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。圧縮比・燃焼室・吸排気・カム・空燃比・点火時期などの相性が良いエンジンは、セッティングBOOSTも強くなります。直線性能が高いエンジンほどコーナーで旋回・制動・立ち上がりの負担が増え、グリップは舗装で最大30%、未舗装で最大55%低下します。</p>
           <p class="sharemsg" id="raceMsg"></p>
 
           <div class="garage" id="garageBox">
@@ -540,7 +540,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           <p><b>2 · クランク動力学</b> — 筒内圧 × dV/dθ を全気筒で合計した図示トルクから、摩擦と負荷を引いて慣性モーメントで回転を進めます。回転数は入力ではなく<b>結果</b>です。</p>
           <p><b>3 · 排気管の音響</b> — 排気弁から出た圧力パルスをデジタル導波路（進行波・後退波の遅延線）に注入し、集合部の散乱接合と管端反射を解いています。管長を変えると脈動が変わり、音色と充填効率の両方が動きます。</p>
           <p><b>4 · 使い方</b> — 「エンジン始動」でセルが回ります。スロットルバーを押さえて（PC では <kbd>Space</kbd> でも）吹かせます。「ダイナモ計測」は同じ物理モデルを高速で回してトルク・出力曲線を出します。</p>
-          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。直線で速いエンジンほど車体への負担が増えるため、カーブでは旋回・制動・立ち上がりのグリップが下がり、グラベルや林道では低下量が大きくなります。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。8項目の組み合わせから「高回転NA・トルクチューン・軽量レスポンス・多気筒ハーモニー」の相性を計算し、相性が良いほどBOOSTの充電と出力が上がります。「リアル」では作戦補助を完全に切れます。</p>
+          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。直線で速いエンジンほど車体への負担が増えるため、カーブでは旋回・制動・立ち上がりのグリップが下がります。低下量は舗装で最大30%、グラベルや林道で最大55%です。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。8項目の組み合わせから「高回転NA・トルクチューン・軽量レスポンス・多気筒ハーモニー」の相性を計算し、相性が良いほどBOOSTの充電と出力が上がります。「リアル」では作戦補助を完全に切れます。</p>
           <p><b>6 · 共有</b> — 番号発行欄で作戦を選んで「番号を発行」を押すと、エンジンと作戦を別のスマホやPCでも読める8桁の合言葉にできます。受け取った番号は「8桁番号」パネルから読み込めます。</p>
           <p><b>7 · スマホでは</b> — パネル見出しをタップで開閉、下端の「負荷・保持」で負荷・Dyno hold・スロットル保持が出ます。スロットル保持を入れると指を離しても開度が残るので、片手で音の変化を追えます。音が出ないときは端末のマナーモードを確認してください。</p>
           <p style="margin-top:12px;color:#5D6875">着想元は AngeTheGreat の <a href="https://www.engine-sim.parts/" target="_blank" rel="noopener" style="color:#7C8896">engine-sim.parts</a>。あちらと同じく、これは音とレスポンスの再現を目的としたモデルで、エンジン設計の数値保証をするものではありません。</p>
@@ -2643,7 +2643,7 @@ function buildCourse(course) {
    somewhere to brake from. This is the whole "driver" — everything else is the
    car deciding whether it can reach that speed. */
 function courseLimits(cs, veh, handlingGrip) {
-  handlingGrip = clamp(handlingGrip == null ? 1 : handlingGrip, .55, 1);
+  handlingGrip = clamp(handlingGrip == null ? 1 : handlingGrip, .40, 1);
   const n = cs.kappa.length, g0 = 9.80665;
   const lim = new Float64Array(n);
   for (let i = 0; i < n; i++) {
@@ -2700,11 +2700,11 @@ function raceRun(cfg, veh, opts) {
   const paceIndex = dispL * (0.62 + 0.38 * flow) * Math.sqrt(cfg.redline / 7000);
   /* A high-output engine needs a heavier driveline, wider cooling package and
      more restraint at the driven tyres.  The resulting handling burden is
-     deliberately zero on a straight course, modest on paved bends and twice
-     as strong on loose rally surfaces.  This lets a smaller engine fight back
+     deliberately zero on a straight course, strong on paved bends and nearly
+     twice as strong on loose rally surfaces. This lets a smaller engine fight back
      through braking and corner exits without adding random outcomes. */
   const speedBurden = clamp((paceIndex - 1.55) / 4.6, 0, 1);
-  const handlingLoss = cs.curved ? speedBurden * (cs.loose ? .30 : .15) : 0;
+  const handlingLoss = cs.curved ? speedBurden * (cs.loose ? .55 : .30) : 0;
   const handlingGrip = 1 - handlingLoss;
   const lim = courseLimits(cs, veh, handlingGrip);
   const underdog = clamp((4.8 - paceIndex) / 4.3, 0, 1);
