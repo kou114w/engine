@@ -219,6 +219,7 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .lane.a{box-shadow:inset 3px 0 0 var(--spark)}
 .lane.b{box-shadow:inset 3px 0 0 var(--bankb)}
 .lane select{margin-bottom:0}
+.lane .lanestrategy{margin-top:8px;color:var(--heat)}
 .lane input{margin-top:8px}
 .lanename{width:100%;background:var(--panel-2);border:1px solid var(--rule);border-radius:2px;
   padding:8px 9px;font-size:12.5px;color:var(--ink);margin-top:0!important}
@@ -242,6 +243,7 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .rescard .who b{color:var(--ok);font-weight:600}
 .rescard .eng{font-size:12.5px;color:var(--ink-dim);margin:3px 0 7px;line-height:1.35}
 .boosttag{display:inline-block;margin-left:7px;color:var(--heat);font:600 9px var(--mono);letter-spacing:.05em}
+.strategytag{display:inline-block;margin-left:7px;color:var(--bankb);font:600 9px var(--mono);letter-spacing:.08em}
 .rescard .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .rescard .nums div span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:#5D6875;text-transform:uppercase}
 .rescard .nums div b{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em}
@@ -495,7 +497,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
             <button class="btn-ghost" id="btnRaceReplay" disabled>もう一度再生</button>
             <button class="btn-ghost" id="btnRaceLink" hidden>対戦リンクをコピー</button>
           </div>
-          <p class="boardnote" style="margin-top:9px">各レーンの欄に<b style="color:var(--heat)">8桁の番号</b>を入れると、そのエンジンが出走します。逆転バトルではブレーキングでゲージを貯め、終盤の直線で自動的にBOOSTを使います。小排気量車ほど効果が大きくなります。</p>
+          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。自動ではエンジン特性に合う作戦を選びます。</p>
           <p class="sharemsg" id="raceMsg"></p>
 
           <div class="garage" id="garageBox">
@@ -525,7 +527,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           <p><b>2 · クランク動力学</b> — 筒内圧 × dV/dθ を全気筒で合計した図示トルクから、摩擦と負荷を引いて慣性モーメントで回転を進めます。回転数は入力ではなく<b>結果</b>です。</p>
           <p><b>3 · 排気管の音響</b> — 排気弁から出た圧力パルスをデジタル導波路（進行波・後退波の遅延線）に注入し、集合部の散乱接合と管端反射を解いています。管長を変えると脈動が変わり、音色と充填効率の両方が動きます。</p>
           <p><b>4 · 使い方</b> — 「エンジン始動」でセルが回ります。スロットルバーを押さえて（PC では <kbd>Space</kbd> でも）吹かせます。「ダイナモ計測」は同じ物理モデルを高速で回してトルク・出力曲線を出します。</p>
-          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。「逆転バトル」はブレーキングでBOOSTを充電し、終盤の直線で自動展開します。小排気量車ほど補助が強く、「リアル」では補助を完全に切れます。</p>
+          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。「リアル」では作戦補助を完全に切れます。</p>
           <p><b>6 · 共有</b> — 「コードをコピー」で組んだ細かな仕様がそのまま文字列になります。「番号を発行」を押すと、サーバーなしで別のスマホやPCでも読める8桁の合言葉になります。8桁版は主要設定を段階値に圧縮し、E4コードとURLは全設定を正確に保持します。</p>
           <p><b>7 · スマホでは</b> — パネル見出しをタップで開閉、下端の「負荷・保持」で負荷・Dyno hold・スロットル保持が出ます。スロットル保持を入れると指を離しても開度が残るので、片手で音の変化を追えます。音が出ないときは端末のマナーモードを確認してください。</p>
           <p style="margin-top:12px;color:#5D6875">着想元は AngeTheGreat の <a href="https://www.engine-sim.parts/" target="_blank" rel="noopener" style="color:#7C8896">engine-sim.parts</a>。あちらと同じく、これは音とレスポンスの再現を目的としたモデルで、エンジン設計の数値保証をするものではありません。</p>
@@ -2469,6 +2471,29 @@ const VEHICLES = {
 };
 const DRIVE_EFF = 0.88;
 
+/* Race tactics create the shape of the contest, not a dice roll. A front
+   runner spends its energy early; a closer deliberately gives away ground,
+   stores more braking energy and makes one strong late move. */
+const RACE_STRATEGIES = {
+  real:   { name: "リアル", mark: "", throttle: 1.00, attack: 0.00, power: 1.00, reserve: 1.00, cap: 1.00, charge: 1.00 },
+  front:  { name: "逃げ", mark: "逃", throttle: 1.00, attack: 0.28, power: 0.62, reserve: 0.55, cap: 0.76, charge: 0.72 },
+  stalk:  { name: "先行", mark: "先", throttle: 0.97, attack: 0.48, power: 0.88, reserve: 0.82, cap: 0.92, charge: 0.90 },
+  closer: { name: "差し", mark: "差", throttle: 0.91, attack: 0.64, power: 1.75, reserve: 1.50, cap: 1.35, charge: 1.20 },
+  deep:   { name: "追込", mark: "追", throttle: 0.84, attack: 0.74, power: 2.15, reserve: 1.85, cap: 1.60, charge: 1.38 }
+};
+function autoRaceStrategy(c) {
+  const d = dispOf(c);
+  if (c.redline >= 8200 && d < 4.8) return "closer";
+  if (d >= 4.7 || (d >= 4 && c.redline < 7200)) return "front";
+  if (c.redline < 7000 || c.stroke > c.bore * 1.06) return "stalk";
+  return "stalk";
+}
+function raceStrategy(key, c, comeback) {
+  if (!comeback) return "real";
+  const k = key === "auto" ? autoRaceStrategy(c) : key;
+  return RACE_STRATEGIES[k] ? k : "stalk";
+}
+
 /* ============================================================
    Courses
 
@@ -2571,13 +2596,16 @@ function raceRun(cfg, veh, opts) {
      lower displacement/flow/redline potential, which gives an underdog a real
      passing chance without replacing the engine simulation with random luck. */
   const comeback = !!opts.comeback;
+  const strategyKey = raceStrategy(opts.strategy || "auto", cfg, comeback);
+  const strategy = RACE_STRATEGIES[strategyKey];
   const dispL = Math.max(0.2, dispOf(cfg));
   const flow = clamp((cfg.portIn - 200) / 2400, 0, 1);
   const paceIndex = dispL * (0.62 + 0.38 * flow) * Math.sqrt(cfg.redline / 7000);
   const underdog = clamp((4.8 - paceIndex) / 4.3, 0, 1);
-  const boostPowerKw = 28 + 72 * underdog;
-  const boostMax = 1.8 + 2.2 * underdog;          // seconds at full deployment
-  let boostEnergy = comeback ? (cs.curved ? 0.25 + 0.45 * underdog : 0.8 + 1.3 * underdog) : 0;
+  const boostPowerKw = (28 + 72 * underdog) * strategy.power;
+  const boostMax = (1.8 + 2.2 * underdog) * strategy.cap; // seconds at full deployment
+  let boostEnergy = comeback
+    ? (cs.curved ? 0.25 + 0.45 * underdog : 0.8 + 1.3 * underdog) * strategy.reserve : 0;
   let boost = 0, boostUsed = 0;
   /* a slow car round a twisty course needs a long clock; a drag strip does not */
   const maxT = opts.maxT || clamp(target / 11 + 22, 30, 130);
@@ -2643,6 +2671,7 @@ function raceRun(cfg, veh, opts) {
     if (idx < 0) idx = 0;
     if (idx >= lim.length) idx = lim.length - 1;
     const kap = Math.abs(cs.kappa[idx]);
+    const progress = dist / Math.max(1, target);
     const Flat = veh.mass * v * v * kap;
     const latUse = Math.min(1, Flat / Fgrip);
     const circle = Math.sqrt(Math.max(0, 1 - latUse * latUse));
@@ -2652,9 +2681,12 @@ function raceRun(cfg, veh, opts) {
     const vt = lim[idx];
     const over = v - vt;
     brake = over > 0.15 ? clamp(over / 2.5, 0, 1) : 0;
-    e.thrTarget = brake > 0 ? 0 : 1;
+    /* Closers sit in the pack on partial throttle, then release everything at
+       their attack point. This produces the visible back-to-front move. */
+    e.thrTarget = brake > 0 ? 0 : (progress < strategy.attack ? strategy.throttle : 1);
     if (comeback && brake > 0.04) {
-      boostEnergy = Math.min(boostMax, boostEnergy + brake * dt * (0.72 + 0.45 * underdog));
+      boostEnergy = Math.min(boostMax,
+        boostEnergy + brake * dt * (0.72 + 0.45 * underdog) * strategy.charge);
     }
 
     const surf = e.omega * veh.tyre / ratio;          // tyre contact-patch speed
@@ -2674,9 +2706,8 @@ function raceRun(cfg, veh, opts) {
        comeback instead of deciding the launch. */
     boost = 0;
     let Fassist = 0;
-    const progress = dist / Math.max(1, target);
-    const boostGate = cs.curved ? 0.52 : 0.60;
-    if (comeback && underdog >= 0.24 && progress >= boostGate && kap < 0.0045 && brake < 0.02 &&
+    const boostEligible = underdog >= 0.24 || strategyKey === "closer" || strategyKey === "deep";
+    if (comeback && boostEligible && progress >= strategy.attack && kap < 0.0045 && brake < 0.02 &&
         shiftT <= 0 && engage >= 0.9 && v > 10 && boostEnergy > 0.002) {
       const gripRoom = Math.max(0, FxCap - Math.max(0, F));
       Fassist = Math.min(gripRoom, Fmax * 0.28, boostPowerKw * 1000 / Math.max(18, v));
@@ -2736,7 +2767,7 @@ function raceRun(cfg, veh, opts) {
   return { tel, audio, len: ai, sr: arate,
     result: { finish, trap, t60: mark60, t100: mark100, t200: mark200, dist, topGear: gear + 1,
       shiftRpm, launch, vmax: vmaxSeen * 3.6, total: target,
-      boostUsed, underdog, boostPowerKw, comeback } };
+      boostUsed, underdog, boostPowerKw, comeback, strategy: strategyKey } };
 }
 let cfg = Object.assign({}, DEFAULT);
 
@@ -4600,6 +4631,9 @@ const laneName = i => (i + 1) + "台目";
 const laneOptions = '<option value="__cur">いまのエンジン</option>'
   + '<option value="__code">8桁の番号 / コード（下の欄）</option>'
   + Object.entries(PRESETS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join("");
+const strategyOptions = '<option value="auto">作戦：自動</option>'
+  + '<option value="front">作戦：逃げ</option><option value="stalk">作戦：先行</option>'
+  + '<option value="closer">作戦：差し</option><option value="deep">作戦：追込</option>';
 vehSel.innerHTML = Object.entries(VEHICLES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join("");
 vehSel.value = "gt";
 courseSel.innerHTML = Object.entries(COURSES).map(([k, c]) => `<option value="${k}">${c.name}</option>`).join("");
@@ -4745,7 +4779,7 @@ function laneChanged(i, wait) {
 /* ---- build however many lanes were asked for, keeping what was typed ---- */
 function buildLanes(n) {
   n = clamp(Math.round(n) || 2, 2, MAX_RACE_ENTRIES);
-  const prev = lanes.map(L => ({ sel: L.sel.value, val: L.input.value, nm: L.name.value }));
+  const prev = lanes.map(L => ({ sel: L.sel.value, val: L.input.value, nm: L.name.value, strat: L.strategy.value }));
   lanesBox.innerHTML = "";
   lanes = [];
   for (let i = 0; i < n; i++) {
@@ -4765,18 +4799,22 @@ function buildLanes(n) {
     nameInp.type = "text"; nameInp.className = "lanename"; nameInp.maxLength = 14;
     nameInp.placeholder = "名前（車体に表示）";
     nameInp.setAttribute("aria-label", laneName(i) + "の名前");
+    const strategySel = document.createElement("select");
+    strategySel.className = "lanestrategy"; strategySel.innerHTML = strategyOptions;
+    strategySel.setAttribute("aria-label", laneName(i) + "の作戦");
     const inp = document.createElement("input");
     inp.type = "text"; inp.className = "codefield"; inp.spellcheck = false;
     inp.placeholder = "8桁の番号を入れる（または E4- コード）";
     inp.setAttribute("aria-label", laneName(i) + "の番号または設定コード");
     const info = document.createElement("p");
     info.className = "laneinfo"; info.setAttribute("role", "status");
-    d.append(row, nameInp, sel, inp, info);
+    d.append(row, nameInp, sel, strategySel, inp, info);
     lanesBox.appendChild(d);
-    lanes.push({ sel, input: inp, name: nameInp, info, i });
+    lanes.push({ sel, input: inp, name: nameInp, strategy: strategySel, info, i });
     sel.value = prev[i] ? prev[i].sel : (i === 0 ? "__cur" : "__code");
     inp.value = prev[i] ? prev[i].val : "";
     nameInp.value = prev[i] ? prev[i].nm : "";
+    strategySel.value = prev[i] ? prev[i].strat : "auto";
     /* the car is redrawn every frame, so a name being typed shows up live */
     nameInp.addEventListener("input", () => {
       laneChanged(i, 250);
@@ -4815,14 +4853,16 @@ async function startRace() {
   sayRace("エントリーを読み込んでいます…", "");
   raceResult.hidden = true;
   raceInfo.firstChild.textContent = "準備中";
+  const comeback = raceRuleSel.value === "comeback";
   const entries = [];
   for (const L of lanes) {
     const r = await resolveLane(L.sel, L.input, laneName(L.i), L.name);
     if (r.err) { btnRace.disabled = false; btnRace.textContent = "レース開始"; sayRace(r.err, "bad"); return; }
+    r.strategyChoice = L.strategy.value;
+    r.strategy = raceStrategy(r.strategyChoice, r.cfg, comeback);
     entries.push(r);
   }
   const veh = VEHICLES[vehSel.value], cs = courseOf(courseSel.value);
-  const comeback = raceRuleSel.value === "comeback";
   btnRace.textContent = "計測中…";
   const raceSr = entries.length >= 9 ? 22050 : entries.length >= 5 ? 24000 : 44100;
   sayRace(entries.length + "台を走らせています… 0 / " + entries.length, "");
@@ -4831,8 +4871,9 @@ async function startRace() {
   const runCache = Object.create(null);
   try {
     for (let i = 0; i < entries.length; i++) {
-      const e = entries[i], key = encodeCfg(e.cfg);
-      const run = runCache[key] || (runCache[key] = raceRun(e.cfg, veh, { course: cs, sr: raceSr, comeback }));
+      const e = entries[i], key = encodeCfg(e.cfg) + "|" + e.strategy;
+      const run = runCache[key] || (runCache[key] = raceRun(e.cfg, veh,
+        { course: cs, sr: raceSr, comeback, strategy: e.strategy }));
       runs.push(run);
       sayRace(entries.length + "台を走らせています… " + (i + 1) + " / " + entries.length, "");
       /* Let the browser paint progress and answer the OS between cars. */
@@ -4844,6 +4885,7 @@ async function startRace() {
   }
   race = {
     runs, cfgs: entries.map(e => e.cfg), names: entries.map(e => e.label),
+    strategies: entries.map(e => e.strategy), strategyChoices: entries.map(e => e.strategyChoice),
     baseNames: entries.map((e, i) => e.base || laneName(i)),
     veh, cs, target: cs.total, comeback,
     dur: Math.max.apply(null, runs.map((r, i) => r.len / r.sr)),
@@ -4927,6 +4969,8 @@ function revealRace() {
   order.forEach((o, k) => { rank[o.i] = k; });
   const cards = race.runs.map((r, i) => {
     const res = r.result, win = rank[i] === 0 && res.finish >= 0;
+    const strategy = RACE_STRATEGIES[race.strategies[i]] || RACE_STRATEGIES.stalk;
+    const strategyTag = race.comeback ? '<em class="strategytag">作戦 ' + strategy.name + '</em>' : '';
     const boostTag = race.comeback && res.boostUsed > 0.04
       ? '<em class="boosttag">⚡ BOOST ' + res.boostUsed.toFixed(1) + 's</em>' : '';
     return '<div class="rescard' + (win ? " win" : "") + '">'
@@ -4934,7 +4978,7 @@ function revealRace() {
       + escapeText(race.names[i] || laneName(i)) + '</span>'
       + (res.finish >= 0 ? "<b>" + (win ? "WIN" : (rank[i] + 1) + "位") + "</b>" : "<b>DNF</b>") + '</div>'
       + '<div class="eng">' + escapeText(describeCfg(race.cfgs[i])) + " · "
-      + Math.round(race.cfgs[i].redline).toLocaleString() + ' rpm' + boostTag + '</div>'
+      + Math.round(race.cfgs[i].redline).toLocaleString() + ' rpm' + strategyTag + boostTag + '</div>'
       + '<div class="nums">'
       + '<div><span>' + Math.round(race.target) + ' m</span><b>'
       + fmtT(res.finish) + '</b><i>s</i></div>'
@@ -5090,6 +5134,7 @@ function drawRaceMap(g, w, h, tt) {
       const colNo = Math.floor(q / compactRows), rowNo = q % compactRows;
       const x = colNo * colW, y = rowTop + rowNo * rowH;
       const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
+      const strat = RACE_STRATEGIES[race.strategies[k]] || RACE_STRATEGIES.stalk;
       if (rowNo % 2 === 0) { g.fillStyle = "rgba(255,255,255,.018)"; g.fillRect(x, y, colW, rowH); }
       if (race.comeback && s.energy > 0) {
         g.fillStyle = "rgba(255,194,75,.45)";
@@ -5097,9 +5142,9 @@ function drawRaceMap(g, w, h, tt) {
       }
       g.textBaseline = "middle";
       g.textAlign = "left"; g.font = "600 10px 'IBM Plex Mono',monospace"; g.fillStyle = col;
-      g.fillText(String(q + 1), x + 6, y + rowH / 2);
+      g.fillText(String(q + 1) + strat.mark, x + 6, y + rowH / 2);
       const raw = String(race.names[k] || laneName(k));
-      const nameX = x + 23, speedW = 48, maxNameW = Math.max(18, colW - 23 - speedW);
+      const nameX = x + 31, speedW = 48, maxNameW = Math.max(18, colW - 31 - speedW);
       g.font = "500 9px 'IBM Plex Sans JP',sans-serif";
       let lab = raw;
       while (lab.length > 1 && g.measureText(lab).width > maxNameW) lab = lab.slice(0, -1);
@@ -5121,10 +5166,11 @@ function drawRaceMap(g, w, h, tt) {
   const rowH = Math.min(30, Math.max(14, (h - 44) / n));
   for (let q = 0; q < n; q++) {
     const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
+    const strat = RACE_STRATEGIES[race.strategies[k]] || RACE_STRATEGIES.stalk;
     const y = 42 + q * rowH;
     g.fillStyle = col;
     g.font = "600 11px 'IBM Plex Mono',monospace";
-    g.fillText(String(q + 1), lx0, y);
+    g.fillText(String(q + 1) + strat.mark, lx0, y);
     const nm = String(race.names[k] || laneName(k));
     g.font = "500 10px 'IBM Plex Sans JP',sans-serif";
     g.fillStyle = "#AEB9C6";
@@ -5203,7 +5249,9 @@ function drawRace() {
        falls in behind once the car nears the finish, so it never runs off the
        track or sits under the finish line. */
     const raw = String(race.names[k] || laneName(k));
-    const nm = raw.length > 14 ? raw.slice(0, 14) + "…" : raw;
+    const strat = RACE_STRATEGIES[race.strategies[k]] || RACE_STRATEGIES.stalk;
+    const marked = "[" + strat.mark + "] " + raw;
+    const nm = marked.length > 14 ? marked.slice(0, 14) + "…" : marked;
     const fs = laneH < 20 ? 9 : laneH < 26 ? 10 : 11;
     g.font = "600 " + fs + "px 'IBM Plex Sans JP',sans-serif";
     const tw = g.measureText(nm).width;
@@ -5285,6 +5333,7 @@ btnRaceLink.addEventListener("click", async () => {
   raceArgs.push("rule=" + encodeURIComponent(raceRuleSel.value));
   raceArgs.push("course=" + encodeURIComponent(courseSel.value));
   raceArgs.push("veh=" + encodeURIComponent(vehSel.value));
+  raceArgs.push("strat=" + encodeURIComponent(lanes.map(L => L.strategy.value).join(",")));
   const url = location.href.split("#")[0] + "#" + raceArgs.join("&");
   const ok = await copyVia(codeIn, url);
   sayRace(ok ? "対戦リンクをコピーしました。開いた人は同じ組み合わせで走らせられます。"
@@ -5898,6 +5947,7 @@ function applyHash() {
   if (hp.course && COURSES[hp.course]) courseSel.value = hp.course;
   if (hp.veh && VEHICLES[hp.veh]) vehSel.value = hp.veh;
   const cfgs = RACE_KEYS.map(k => (hp[k] ? decodeCfg(hp[k]) : null));
+  const sharedStrategies = String(hp.strat || "").split(",");
   const count = cfgs.reduce((n, c, i) => c ? i + 1 : n, 0);
   if (!count) return false;
   if (cfgs[0]) {
@@ -5911,6 +5961,9 @@ function applyHash() {
     buildLanes(n);
     for (let i = 0; i < n; i++) {
       if (!lanes[i]) continue;
+      if (["auto", "front", "stalk", "closer", "deep"].includes(sharedStrategies[i])) {
+        lanes[i].strategy.value = sharedStrategies[i];
+      }
       if (i === 0 && cfgs[0]) { lanes[0].sel.value = "__cur"; lanes[0].input.value = ""; }
       else if (cfgs[i]) {
         lanes[i].sel.value = "__code";
