@@ -4992,6 +4992,19 @@ laneCountSel.addEventListener("change", () => buildLanes(+laneCountSel.value));
 
 /* ---- run them all ---- */
 async function startRace() {
+  /* A new measurement can be requested while the previous replay is still
+     audible. Cancel that replay now so its late onended event cannot open an
+     old result card over the new race's preparation screen. */
+  if (race) {
+    clearTimeout(race.revealTimer);
+    if (race.src) {
+      race.src.onended = null;
+      try { race.src.stop(); } catch (e) { /* already done */ }
+      race.src = null;
+    }
+    race.playing = false; race.phase = "preparing";
+    if (race.resumeEngine) { running = true; race.resumeEngine = false; }
+  }
   btnRace.disabled = true; btnRace.textContent = "照会中…";
   sayRace("エントリーを読み込んでいます…", "");
   raceResult.hidden = true;
@@ -5034,7 +5047,8 @@ async function startRace() {
     veh, cs, target: cs.total, comeback,
     dur: Math.max.apply(null, runs.map((r, i) => r.len / r.sr)),
     sampleRate: runs[0].sr, audioBuf: null,
-    t0: 0, playing: false, src: null, revealed: false,
+    t0: 0, playing: false, phase: "preparing", src: null, revealed: false,
+    resumeEngine: false,
     labelLayout: []
   };
   btnRace.disabled = false; btnRace.textContent = "レース開始";
@@ -5048,38 +5062,57 @@ async function startRace() {
 
 async function playRace() {
   if (!race) return;
-  if (race.src) { try { race.src.stop(); } catch (e) { /* already done */ } race.src = null; }
-  race.revealed = false; raceResult.hidden = true;
+  const activeRace = race;
+  if (activeRace.src) {
+    /* Stopping a replay also fires onended in some browsers. Detach it first,
+       otherwise the old replay can reveal the result of the new one. */
+    activeRace.src.onended = null;
+    try { activeRace.src.stop(); } catch (e) { /* already done */ }
+    activeRace.src = null;
+  }
+  activeRace.revealed = false; activeRace.playing = false; activeRace.phase = "preparing";
+  raceResult.hidden = true;
   /* Start every replay from the natural label slots. Keeping the previous
      finish layout would make the labels slide across the map at the restart. */
-  race.labelLayout = [];
-  raceInfo.firstChild.textContent = race.comeback ? "走行中 · レースバトル" : "走行中";
-  clearTimeout(race.revealTimer);
-  /* the verdict must not depend on anything being drawn: a collapsed panel or a
-     background tab stops the animation loop, and the race still finished */
-  race.revealTimer = setTimeout(revealRace, race.dur * 1000 + 250);
+  activeRace.labelLayout = [];
+  raceInfo.firstChild.textContent = "再生準備中";
+  clearTimeout(activeRace.revealTimer);
   const ok = await startAudio();
-  if (!ok) { race.t0 = performance.now() / 1000; race.playing = true; race.clock = "perf"; return; }
-  const wasRunning = running;
+  if (race !== activeRace) return;
+  if (!ok) {
+    activeRace.t0 = performance.now() / 1000;
+    activeRace.playing = true; activeRace.phase = "running"; activeRace.clock = "perf";
+    raceInfo.firstChild.textContent = activeRace.comeback ? "走行中 · レースバトル" : "走行中";
+    armRaceFinish(activeRace);
+    return;
+  }
+  const wasRunning = running || activeRace.resumeEngine;
+  activeRace.resumeEngine = wasRunning;
   running = false;
-  let buf = race.audioBuf;
+  let buf = activeRace.audioBuf;
   if (!buf) {
     /* Keep the mix at the race sample rate.  AudioBuffer performs the final
        device-rate conversion, avoiding a second 44.1 kHz copy of a long
        thirteen-car race. */
-    const mixSr = race.sampleRate || race.runs[0].sr;
-    const outN = Math.max(1, Math.ceil(Math.max.apply(null, race.runs.map(r => r.len * mixSr / r.sr))));
+    const mixSr = activeRace.sampleRate || activeRace.runs[0].sr;
+    const outN = Math.max(1, Math.ceil(Math.max.apply(null, activeRace.runs.map(r => r.len * mixSr / r.sr))));
     try { buf = ctx.createBuffer(2, outN, mixSr); }
-    catch (err) { race.t0 = performance.now() / 1000; race.playing = true; race.clock = "perf"; return; }
+    catch (err) {
+      activeRace.t0 = performance.now() / 1000;
+      activeRace.playing = true; activeRace.phase = "running"; activeRace.clock = "perf";
+      raceInfo.firstChild.textContent = activeRace.comeback ? "走行中 · レースバトル" : "走行中";
+      armRaceFinish(activeRace);
+      return;
+    }
     const L = buf.getChannelData(0), R = buf.getChannelData(1);
-    const n = race.runs.length, spread = 1 / Math.sqrt(n);
+    const n = activeRace.runs.length, spread = 1 / Math.sqrt(n);
     const pick = (arr, len, x) => {
       const j = x | 0; if (j >= len) return 0;
       const f = x - j, b = j + 1 < len ? arr[j + 1] : arr[j];
       return arr[j] * (1 - f) + b * f;
     };
     for (let k = 0; k < n; k++) {
-      const run = race.runs[k], au = run.audio, len = run.len;
+      const run = activeRace.runs[k], au = run.audio, len = run.len;
       if (!au) continue;
       const step = run.sr / mixSr;
       const pan = n === 1 ? 0.5 : 0.08 + 0.84 * (k / (n - 1));
@@ -5089,19 +5122,58 @@ async function playRace() {
         L[i] += v * gl; R[i] += v * gr;
       }
     }
-    race.audioBuf = buf;
+    activeRace.audioBuf = buf;
     /* The stereo mix is enough for replay. Drop every per-car recording; a
        duplicated run object is harmless because all mixing is already done. */
-    for (const run of race.runs) run.audio = null;
+    for (const run of activeRace.runs) run.audio = null;
+  }
+  if (race !== activeRace) {
+    if (wasRunning) running = true;
+    activeRace.resumeEngine = false;
+    return;
   }
   const src = ctx.createBufferSource();
   src.buffer = buf;
   const gn = ctx.createGain();
   gn.gain.value = 0.85 * clamp(cfg.volume, 0.1, 1.5);
   src.connect(gn); gn.connect(ctx.destination);
-  src.onended = () => { race.playing = false; revealRace(); if (wasRunning) running = true; };
+  src.onended = () => {
+    finishRacePlayback(activeRace);
+  };
   src.start();
-  race.src = src; race.t0 = ctx.currentTime; race.playing = true; race.clock = "ctx";
+  activeRace.src = src; activeRace.t0 = ctx.currentTime;
+  activeRace.playing = true; activeRace.phase = "running"; activeRace.clock = "ctx";
+  raceInfo.firstChild.textContent = activeRace.comeback ? "走行中 · レースバトル" : "走行中";
+  armRaceFinish(activeRace);
+}
+
+/* Draw calls can pause in a collapsed panel or background tab, so finishing is
+   clock-driven. AudioContext time is checked again after the timer because it
+   can pause on phones; a wall-clock timeout must never reveal an unfinished run. */
+function armRaceFinish(activeRace) {
+  clearTimeout(activeRace.revealTimer);
+  const check = () => {
+    if (race !== activeRace || activeRace.phase !== "running") return;
+    const now = activeRace.clock === "ctx" ? ctx.currentTime : performance.now() / 1000;
+    const left = activeRace.dur - (now - activeRace.t0);
+    if (left > .02) {
+      activeRace.revealTimer = setTimeout(check, Math.max(100, left * 1000 + 80));
+      return;
+    }
+    finishRacePlayback(activeRace);
+  };
+  activeRace.revealTimer = setTimeout(check, activeRace.dur * 1000 + 250);
+}
+
+function finishRacePlayback(activeRace) {
+  if (!activeRace || race !== activeRace || activeRace.phase === "finished") return;
+  activeRace.playing = false;
+  activeRace.phase = "finished";
+  if (activeRace.resumeEngine) {
+    running = true;
+    activeRace.resumeEngine = false;
+  }
+  revealRace();
 }
 
 function fmtT(x) { return x < 0 ? "—" : x.toFixed(2); }
@@ -5109,6 +5181,8 @@ function fmtT(x) { return x < 0 ? "—" : x.toFixed(2); }
 /* the verdict is held back until the cars have actually finished */
 function revealRace() {
   if (!race || race.revealed) return;
+  race.playing = false;
+  race.phase = "finished";
   race.revealed = true;
   clearTimeout(race.revealTimer);
   const order = race.runs.map((r, i) => ({ i, f: r.result.finish }))
@@ -5433,10 +5507,10 @@ function drawRace() {
     return;
   }
   const n = race.runs.length;
-  const tt = race.playing
+  const rawTime = race.phase === "running"
     ? (race.clock === "ctx" ? ctx.currentTime - race.t0 : performance.now() / 1000 - race.t0)
-    : 1e9;
-  if (tt >= race.dur) revealRace();
+    : race.phase === "finished" ? race.dur : 0;
+  const tt = Math.max(0, Math.min(race.dur, rawTime));
   /* a course with corners is worth drawing as a course; a drag strip is not */
   if (race.cs && race.cs.curved) { drawRaceMap(g, w, h, tt); return; }
 
