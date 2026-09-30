@@ -401,17 +401,17 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
         </div>
       </section>
       <section class="panel">
-        <h2><span>設定の共有 · Share</span><span class="idx">02<i class="chev">▾</i></span></h2>
+        <h2><span>8桁番号 · Number</span><span class="idx">02<i class="chev">▾</i></span></h2>
         <div class="pbody">
-          <div class="ctl">
+          <!-- Exact E4 codes remain an internal compatibility format for old
+               links and race data, but the public sharing screen is 8 digits. -->
+          <div hidden>
             <div class="row"><span class="lab">このエンジンのコード<small>Code</small></span></div>
             <input type="text" id="codeOut" class="codefield" readonly spellcheck="false" aria-label="現在の設定コード">
-          </div>
-          <div class="rowbtns">
             <button class="btn-ghost" id="btnCopyCode">コードをコピー</button>
             <button class="btn-ghost" id="btnCopyUrl" hidden>URLをコピー</button>
           </div>
-          <div class="ctl" style="margin-top:16px">
+          <div class="ctl">
             <div class="row"><span class="lab">8桁の番号を発行<small>Number</small></span></div>
             <select id="numStrategy" aria-label="番号に含める作戦" style="margin-bottom:9px">
               <option value="auto" selected>作戦：自動</option>
@@ -425,7 +425,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
               <div class="numout none" id="numOut">— — — —</div>
               <button class="btn-ghost" id="btnNumCopy" hidden>コピー</button>
             </div>
-            <div class="rowbtns" style="margin-top:9px">
+            <div hidden>
               <button class="btn-ghost" id="btnNumExport" hidden>番号を書き出し</button>
               <button class="btn-ghost" id="btnNumImport" hidden>番号を読み込み</button>
               <input type="file" id="numFile" accept=".json,application/json" hidden>
@@ -433,8 +433,9 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
             <p class="boardnote" id="numState">確認中…</p>
           </div>
           <div class="ctl" style="margin-top:14px">
-            <div class="row"><span class="lab">受け取った番号 / コード<small>Load</small></span></div>
-            <input type="text" id="codeIn" class="codefield" spellcheck="false" placeholder="8桁の番号、または E4-…" aria-label="読み込む番号または設定コード">
+            <div class="row"><span class="lab">受け取った8桁番号<small>Load</small></span></div>
+            <input type="text" id="codeIn" class="codefield" inputmode="numeric" maxlength="8"
+              spellcheck="false" placeholder="8桁の数字" aria-label="読み込む8桁番号">
           </div>
           <div class="rowbtns"><button class="btn-ghost" id="btnLoadCode">読み込む</button></div>
           <p class="sharemsg" id="shareMsg" role="status"></p>
@@ -539,7 +540,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           <p><b>3 · 排気管の音響</b> — 排気弁から出た圧力パルスをデジタル導波路（進行波・後退波の遅延線）に注入し、集合部の散乱接合と管端反射を解いています。管長を変えると脈動が変わり、音色と充填効率の両方が動きます。</p>
           <p><b>4 · 使い方</b> — 「エンジン始動」でセルが回ります。スロットルバーを押さえて（PC では <kbd>Space</kbd> でも）吹かせます。「ダイナモ計測」は同じ物理モデルを高速で回してトルク・出力曲線を出します。</p>
           <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。8項目の組み合わせから「高回転NA・トルクチューン・軽量レスポンス・多気筒ハーモニー」の相性を計算し、相性が良いほどBOOSTの充電と出力が上がります。「リアル」では作戦補助を完全に切れます。</p>
-          <p><b>6 · 共有</b> — 「コードをコピー」で組んだ細かな仕様がそのまま文字列になります。番号発行欄で作戦を選んで「番号を発行」を押すと、エンジンと作戦を別のスマホやPCでも読める8桁の合言葉にできます。8桁版は主要設定を段階値に圧縮し、E4コードとURLは全設定を正確に保持します。</p>
+          <p><b>6 · 共有</b> — 番号発行欄で作戦を選んで「番号を発行」を押すと、エンジンと作戦を別のスマホやPCでも読める8桁の合言葉にできます。受け取った番号は「8桁番号」パネルから読み込めます。</p>
           <p><b>7 · スマホでは</b> — パネル見出しをタップで開閉、下端の「負荷・保持」で負荷・Dyno hold・スロットル保持が出ます。スロットル保持を入れると指を離しても開度が残るので、片手で音の変化を追えます。音が出ないときは端末のマナーモードを確認してください。</p>
           <p style="margin-top:12px;color:#5D6875">着想元は AngeTheGreat の <a href="https://www.engine-sim.parts/" target="_blank" rel="noopener" style="color:#7C8896">engine-sim.parts</a>。あちらと同じく、これは音とレスポンスの再現を目的としたモデルで、エンジン設計の数値保証をするものではありません。</p>
         </div>
@@ -4523,20 +4524,14 @@ function applyLoaded(c) {
 
 btnLoadCode.addEventListener("click", async () => {
   const raw = String(codeIn.value || "").trim(), d = digitsOf(raw);
-  if (!/^E[0-9]-/i.test(raw) && d.length === 8) {
-    say("番号を照会しています…", "");
-    const r = await lookupNumber(d);
-    if (!r.cfg) { say(r.err, "bad"); return; }
-    if (!applyLoaded(r.cfg)) { say("番号は確認できましたが、設定項目がロック中です。錠前を解除してからもう一度読み込んでください。", "bad"); return; }
-    numStrategy.value = cleanNumberStrategy(r.strategy);
-    say(describeCfg(r.cfg) + (r.compact ? " を8桁番号から復元しました。" : " を読み込みました。")
-      + " 作戦は「" + numberStrategyName(r.strategy) + "」です。", "ok");
-    return;
-  }
-  const c = decodeCfg(raw);
-  if (!c) { say("8桁の番号か、E4- で始まるコードを入れてください。", "bad"); return; }
-  if (!applyLoaded(c)) { say("コードは確認できましたが、設定項目がロック中です。錠前を解除してからもう一度読み込んでください。", "bad"); return; }
-  say(describeCfg(c) + " を読み込みました。", "ok");
+  if (d.length !== 8) { say("8桁の数字を入れてください。", "bad"); return; }
+  say("番号を照会しています…", "");
+  const r = await lookupNumber(d);
+  if (!r.cfg) { say(r.err, "bad"); return; }
+  if (!applyLoaded(r.cfg)) { say("番号は確認できましたが、設定項目がロック中です。錠前を解除してからもう一度読み込んでください。", "bad"); return; }
+  numStrategy.value = cleanNumberStrategy(r.strategy);
+  say(describeCfg(r.cfg) + (r.compact ? " を8桁番号から復元しました。" : " を読み込みました。")
+    + " 作戦は「" + numberStrategyName(r.strategy) + "」です。", "ok");
 });
 codeIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); btnLoadCode.click(); } });
 
@@ -4577,9 +4572,7 @@ async function initNumbers() {
   if (db) { numState.textContent = "4〜9で始まる番号にエンジンと作戦を保存"; return; }
   numState.textContent = "4〜9で始まる番号はサーバー不要 · エンジンと作戦を保存";
   btnNumExport.hidden = false; btnNumImport.hidden = false;
-  if (!lsSet("cc.probe", "1")) {
-    say("このブラウザは保存を許可していないので、発行した番号はタブを閉じると消えます。書き出しておいてください。", "bad");
-  }
+  lsSet("cc.probe", "1");
   /* the garage reads the same garage.json for its board and hands the numbers
      it carries to takeNumbers, so this does not fetch it a second time */
 }
