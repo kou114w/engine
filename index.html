@@ -210,9 +210,10 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .sharemsg{margin:11px 0 0;font-size:11.5px;color:var(--muted);min-height:1.3em;line-height:1.45}
 .sharemsg.ok{color:var(--ok)}
 .sharemsg.bad{color:var(--danger)}
-.racegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.racegrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .racegrid.two{grid-template-columns:repeat(2,1fr);margin-top:12px}
 .lanes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:900px){.racegrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:640px){.lanes{grid-template-columns:1fr}.racegrid.two{grid-template-columns:1fr}}
 .lane{border:1px solid var(--rule);border-radius:2px;padding:10px 11px;background:var(--panel-2)}
 .lane.a{box-shadow:inset 3px 0 0 var(--spark)}
@@ -240,6 +241,7 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .rescard .who{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5D6875;display:flex;justify-content:space-between;gap:8px}
 .rescard .who b{color:var(--ok);font-weight:600}
 .rescard .eng{font-size:12.5px;color:var(--ink-dim);margin:3px 0 7px;line-height:1.35}
+.boosttag{display:inline-block;margin-left:7px;color:var(--heat);font:600 9px var(--mono);letter-spacing:.05em}
 .rescard .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .rescard .nums div span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:#5D6875;text-transform:uppercase}
 .rescard .nums div b{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em}
@@ -482,13 +484,18 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
               <select id="vehSel"></select></label>
             <label class="ctl"><div class="row"><span class="lab">コース<small>Course</small></span></div>
               <select id="courseSel" aria-label="コース"></select></label>
+            <label class="ctl"><div class="row"><span class="lab">レースルール<small>Rule</small></span></div>
+              <select id="raceRule" aria-label="レースルール">
+                <option value="comeback" selected>逆転バトル（BOOST）</option>
+                <option value="real">リアル（補助なし）</option>
+              </select></label>
           </div>
           <div class="rowbtns" style="margin-top:4px">
             <button class="btn-ghost" id="btnRace">レース開始</button>
             <button class="btn-ghost" id="btnRaceReplay" disabled>もう一度再生</button>
             <button class="btn-ghost" id="btnRaceLink" hidden>対戦リンクをコピー</button>
           </div>
-          <p class="boardnote" style="margin-top:9px">各レーンの欄に<b style="color:var(--heat)">8桁の番号</b>を入れると、そのエンジンが出走します。エンジンを組んでいなくても、プリセットを選ぶだけで走らせられます。</p>
+          <p class="boardnote" style="margin-top:9px">各レーンの欄に<b style="color:var(--heat)">8桁の番号</b>を入れると、そのエンジンが出走します。逆転バトルではブレーキングでゲージを貯め、終盤の直線で自動的にBOOSTを使います。小排気量車ほど効果が大きくなります。</p>
           <p class="sharemsg" id="raceMsg"></p>
 
           <div class="garage" id="garageBox">
@@ -518,7 +525,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           <p><b>2 · クランク動力学</b> — 筒内圧 × dV/dθ を全気筒で合計した図示トルクから、摩擦と負荷を引いて慣性モーメントで回転を進めます。回転数は入力ではなく<b>結果</b>です。</p>
           <p><b>3 · 排気管の音響</b> — 排気弁から出た圧力パルスをデジタル導波路（進行波・後退波の遅延線）に注入し、集合部の散乱接合と管端反射を解いています。管長を変えると脈動が変わり、音色と充填効率の両方が動きます。</p>
           <p><b>4 · 使い方</b> — 「エンジン始動」でセルが回ります。スロットルバーを押さえて（PC では <kbd>Space</kbd> でも）吹かせます。「ダイナモ計測」は同じ物理モデルを高速で回してトルク・出力曲線を出します。</p>
-          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、クランクにかかる負荷と慣性としてエンジンに返るので、トルクの出方や許容回転数がそのままタイムに出ます。音も両車ぶんを実際に合成して左右に振っています。</p>
+          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。「逆転バトル」はブレーキングでBOOSTを充電し、終盤の直線で自動展開します。小排気量車ほど補助が強く、「リアル」では補助を完全に切れます。</p>
           <p><b>6 · 共有</b> — 「コードをコピー」で組んだ細かな仕様がそのまま文字列になります。「番号を発行」を押すと、サーバーなしで別のスマホやPCでも読める8桁の合言葉になります。8桁版は主要設定を段階値に圧縮し、E4コードとURLは全設定を正確に保持します。</p>
           <p><b>7 · スマホでは</b> — パネル見出しをタップで開閉、下端の「負荷・保持」で負荷・Dyno hold・スロットル保持が出ます。スロットル保持を入れると指を離しても開度が残るので、片手で音の変化を追えます。音が出ないときは端末のマナーモードを確認してください。</p>
           <p style="margin-top:12px;color:#5D6875">着想元は AngeTheGreat の <a href="https://www.engine-sim.parts/" target="_blank" rel="noopener" style="color:#7C8896">engine-sim.parts</a>。あちらと同じく、これは音とレスポンスの再現を目的としたモデルで、エンジン設計の数値保証をするものではありません。</p>
@@ -2559,6 +2566,19 @@ function raceRun(cfg, veh, opts) {
   const cs = opts.course || buildCourse(COURSES.drag402);
   const target = cs.total;
   const lim = courseLimits(cs, veh);
+  /* Optional game rule: braking stores a short overtake burst, then the driver
+     spends it on a late straight.  The assist is stronger for an engine with a
+     lower displacement/flow/redline potential, which gives an underdog a real
+     passing chance without replacing the engine simulation with random luck. */
+  const comeback = !!opts.comeback;
+  const dispL = Math.max(0.2, dispOf(cfg));
+  const flow = clamp((cfg.portIn - 200) / 2400, 0, 1);
+  const paceIndex = dispL * (0.62 + 0.38 * flow) * Math.sqrt(cfg.redline / 7000);
+  const underdog = clamp((4.8 - paceIndex) / 4.3, 0, 1);
+  const boostPowerKw = 28 + 72 * underdog;
+  const boostMax = 1.8 + 2.2 * underdog;          // seconds at full deployment
+  let boostEnergy = comeback ? (cs.curved ? 0.25 + 0.45 * underdog : 0.8 + 1.3 * underdog) : 0;
+  let boost = 0, boostUsed = 0;
   /* a slow car round a twisty course needs a long clock; a drag strip does not */
   const maxT = opts.maxT || clamp(target / 11 + 22, 30, 130);
   const e = new EngineSim(sr);
@@ -2592,7 +2612,7 @@ function raceRun(cfg, veh, opts) {
   const arate = sr / dec;
   let audio = new Float32Array(Math.round(clamp(target / 18 + 14, 18, maxT) * arate));
   let ai = 0;
-  const tel = { t: [], v: [], rpm: [], gear: [], dist: [], spin: [], brake: [] };
+  const tel = { t: [], v: [], rpm: [], gear: [], dist: [], spin: [], brake: [], boost: [], energy: [] };
   const every = Math.round(sr / (cs.curved ? 90 : 200));
   let mark60 = -1, mark100 = -1, mark200 = -1, finish = -1, trap = 0;
   let vmaxSeen = 0;
@@ -2633,6 +2653,9 @@ function raceRun(cfg, veh, opts) {
     const over = v - vt;
     brake = over > 0.15 ? clamp(over / 2.5, 0, 1) : 0;
     e.thrTarget = brake > 0 ? 0 : 1;
+    if (comeback && brake > 0.04) {
+      boostEnergy = Math.min(boostMax, boostEnergy + brake * dt * (0.72 + 0.45 * underdog));
+    }
 
     const surf = e.omega * veh.tyre / ratio;          // tyre contact-patch speed
     const slip = (surf - v) / Math.max(4, v);
@@ -2645,12 +2668,31 @@ function raceRun(cfg, veh, opts) {
     spin = (surf - v) > 0.6 && slip > 0.05 ? 1 : 0;
     const Fbrake = -brake * Fgrip * 0.92 * circle;
 
+    /* The overtake motor acts at the driven wheels after the clutch. It still
+       obeys the friction circle, so it cannot magic a car through a corner or
+       rescue wheelspin. Deployment begins late enough to create a visible
+       comeback instead of deciding the launch. */
+    boost = 0;
+    let Fassist = 0;
+    const progress = dist / Math.max(1, target);
+    const boostGate = cs.curved ? 0.52 : 0.60;
+    if (comeback && underdog >= 0.24 && progress >= boostGate && kap < 0.0045 && brake < 0.02 &&
+        shiftT <= 0 && engage >= 0.9 && v > 10 && boostEnergy > 0.002) {
+      const gripRoom = Math.max(0, FxCap - Math.max(0, F));
+      Fassist = Math.min(gripRoom, Fmax * 0.28, boostPowerKw * 1000 / Math.max(18, v));
+      if (Fassist > 1) {
+        boost = 1;
+        const used = Math.min(dt, boostEnergy);
+        boostEnergy -= used; boostUsed += used;
+      }
+    }
+
     e.extLoad = Tr;
     e.extI = e.I + Idrive;
     if (shiftT > 0) { shiftT -= dt; e.cut = 0.02; }
     e.step();
 
-    v += ((F + Fbrake - Fdrag - Froll) / veh.mass) * dt;
+    v += ((F + Fassist + Fbrake - Fdrag - Froll) / veh.mass) * dt;
     if (v < 0) v = 0;
     if (v > vmaxSeen) vmaxSeen = v;
     if ((k % dec) === 0) {
@@ -2687,12 +2729,14 @@ function raceRun(cfg, veh, opts) {
       tel.t.push(t); tel.v.push(v * 3.6); tel.rpm.push(e.rpm);
       tel.gear.push(gear + 1); tel.dist.push(dist); tel.spin.push(spin);
       tel.brake.push(brake > 0.05 ? 1 : 0);
+      tel.boost.push(boost); tel.energy.push(boostMax > 0 ? boostEnergy / boostMax : 0);
     }
     if (finish >= 0 && t > finish + 0.35) break;
   }
   return { tel, audio, len: ai, sr: arate,
     result: { finish, trap, t60: mark60, t100: mark100, t200: mark200, dist, topGear: gear + 1,
-      shiftRpm, launch, vmax: vmaxSeen * 3.6, total: target } };
+      shiftRpm, launch, vmax: vmaxSeen * 3.6, total: target,
+      boostUsed, underdog, boostPowerKw, comeback } };
 }
 let cfg = Object.assign({}, DEFAULT);
 
@@ -4543,6 +4587,7 @@ deckToggle.addEventListener("click", () => {
 /* ---------- head to head ---------- */
 const lanesBox = document.getElementById("lanes"), laneCountSel = document.getElementById("laneCount"),
   vehSel = document.getElementById("vehSel"), courseSel = document.getElementById("courseSel"),
+  raceRuleSel = document.getElementById("raceRule"),
   btnRace = document.getElementById("btnRace"), btnRaceReplay = document.getElementById("btnRaceReplay"),
   raceMsg = document.getElementById("raceMsg"), raceInfo = document.getElementById("raceInfo"),
   raceResult = document.getElementById("raceResult");
@@ -4777,6 +4822,7 @@ async function startRace() {
     entries.push(r);
   }
   const veh = VEHICLES[vehSel.value], cs = courseOf(courseSel.value);
+  const comeback = raceRuleSel.value === "comeback";
   btnRace.textContent = "計測中…";
   const raceSr = entries.length >= 9 ? 22050 : entries.length >= 5 ? 24000 : 44100;
   sayRace(entries.length + "台を走らせています… 0 / " + entries.length, "");
@@ -4786,7 +4832,7 @@ async function startRace() {
   try {
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i], key = encodeCfg(e.cfg);
-      const run = runCache[key] || (runCache[key] = raceRun(e.cfg, veh, { course: cs, sr: raceSr }));
+      const run = runCache[key] || (runCache[key] = raceRun(e.cfg, veh, { course: cs, sr: raceSr, comeback }));
       runs.push(run);
       sayRace(entries.length + "台を走らせています… " + (i + 1) + " / " + entries.length, "");
       /* Let the browser paint progress and answer the OS between cars. */
@@ -4799,15 +4845,17 @@ async function startRace() {
   race = {
     runs, cfgs: entries.map(e => e.cfg), names: entries.map(e => e.label),
     baseNames: entries.map((e, i) => e.base || laneName(i)),
-    veh, cs, target: cs.total,
+    veh, cs, target: cs.total, comeback,
     dur: Math.max.apply(null, runs.map((r, i) => r.len / r.sr)),
     sampleRate: runs[0].sr, audioBuf: null,
     t0: 0, playing: false, src: null, revealed: false
   };
   btnRace.disabled = false; btnRace.textContent = "レース開始";
   btnRaceReplay.disabled = false;
-  raceInfo.firstChild.textContent = "走行中";
-  sayRace("結果は走り終わってから出ます。", "");
+  raceInfo.firstChild.textContent = comeback ? "走行中 · BOOST" : "走行中";
+  sayRace(comeback
+    ? "ブレーキで充電し、終盤の直線でBOOSTを自動使用します。結果は最後に出ます。"
+    : "結果は走り終わってから出ます。", "");
   await playRace();
 }
 
@@ -4815,7 +4863,7 @@ async function playRace() {
   if (!race) return;
   if (race.src) { try { race.src.stop(); } catch (e) { /* already done */ } race.src = null; }
   race.revealed = false; raceResult.hidden = true;
-  raceInfo.firstChild.textContent = "走行中";
+  raceInfo.firstChild.textContent = race.comeback ? "走行中 · BOOST" : "走行中";
   clearTimeout(race.revealTimer);
   /* the verdict must not depend on anything being drawn: a collapsed panel or a
      background tab stops the animation loop, and the race still finished */
@@ -4879,12 +4927,14 @@ function revealRace() {
   order.forEach((o, k) => { rank[o.i] = k; });
   const cards = race.runs.map((r, i) => {
     const res = r.result, win = rank[i] === 0 && res.finish >= 0;
+    const boostTag = race.comeback && res.boostUsed > 0.04
+      ? '<em class="boosttag">⚡ BOOST ' + res.boostUsed.toFixed(1) + 's</em>' : '';
     return '<div class="rescard' + (win ? " win" : "") + '">'
       + '<div class="who"><span style="color:' + LANE_COL[i % LANE_COL.length] + '">■ '
       + escapeText(race.names[i] || laneName(i)) + '</span>'
       + (res.finish >= 0 ? "<b>" + (win ? "WIN" : (rank[i] + 1) + "位") + "</b>" : "<b>DNF</b>") + '</div>'
       + '<div class="eng">' + escapeText(describeCfg(race.cfgs[i])) + " · "
-      + Math.round(race.cfgs[i].redline).toLocaleString() + ' rpm</div>'
+      + Math.round(race.cfgs[i].redline).toLocaleString() + ' rpm' + boostTag + '</div>'
       + '<div class="nums">'
       + '<div><span>' + Math.round(race.target) + ' m</span><b>'
       + fmtT(res.finish) + '</b><i>s</i></div>'
@@ -4916,7 +4966,8 @@ function raceSample(run, tt) {
   let i = Math.min(T.t.length - 1, Math.max(0, Math.round(tt / (T.t[1] - T.t[0] || 0.005))));
   while (i > 0 && T.t[i] > tt) i--;
   while (i < T.t.length - 1 && T.t[i + 1] <= tt) i++;
-  return { v: T.v[i], rpm: T.rpm[i], gear: T.gear[i], dist: T.dist[i], spin: T.spin[i] };
+  return { v: T.v[i], rpm: T.rpm[i], gear: T.gear[i], dist: T.dist[i], spin: T.spin[i],
+    boost: T.boost ? T.boost[i] : 0, energy: T.energy ? T.energy[i] : 0 };
 }
 
 /* ---- a curved course is drawn as the track itself, cars running on it ---- */
@@ -4983,6 +5034,10 @@ function drawRaceMap(g, w, h, tt) {
     const r = Math.max(5, Math.min(9, tw * 0.62));
     g.save();
     g.translate(cx, cy); g.rotate(ang);
+    if (s.boost) {
+      g.fillStyle = "rgba(255,194,75,.20)";
+      g.beginPath(); g.arc(0, 0, r * 2.2, 0, 7); g.fill();
+    }
     g.fillStyle = col;
     g.beginPath();
     g.moveTo(r, 0); g.lineTo(-r * 0.85, -r * 0.72);
@@ -5036,6 +5091,10 @@ function drawRaceMap(g, w, h, tt) {
       const x = colNo * colW, y = rowTop + rowNo * rowH;
       const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
       if (rowNo % 2 === 0) { g.fillStyle = "rgba(255,255,255,.018)"; g.fillRect(x, y, colW, rowH); }
+      if (race.comeback && s.energy > 0) {
+        g.fillStyle = "rgba(255,194,75,.45)";
+        g.fillRect(x + 23, y + rowH - 2, Math.max(0, colW - 29) * s.energy, 1.5);
+      }
       g.textBaseline = "middle";
       g.textAlign = "left"; g.font = "600 10px 'IBM Plex Mono',monospace"; g.fillStyle = col;
       g.fillText(String(q + 1), x + 6, y + rowH / 2);
@@ -5047,7 +5106,7 @@ function drawRaceMap(g, w, h, tt) {
       if (lab !== raw) lab = lab.slice(0, Math.max(1, lab.length - 1)) + "…";
       g.fillStyle = "#AEB9C6"; g.fillText(lab, nameX, y + rowH / 2);
       g.textAlign = "right"; g.font = "600 9px 'IBM Plex Mono',monospace"; g.fillStyle = col;
-      g.fillText(Math.round(s.v) + " km/h", x + colW - 6, y + rowH / 2);
+      g.fillText((s.boost ? "⚡" : "") + Math.round(s.v) + " km/h", x + colW - 6, y + rowH / 2);
     }
     g.textBaseline = "alphabetic"; g.textAlign = "left";
     return;
@@ -5072,7 +5131,7 @@ function drawRaceMap(g, w, h, tt) {
     g.fillText(nm.length > 9 ? nm.slice(0, 9) + "…" : nm, lx0 + 14, y);
     g.font = "600 11px 'IBM Plex Mono',monospace";
     g.fillStyle = col;
-    g.fillText(Math.round(s.v) + "", lx0 + 14, y + 12);
+    g.fillText((s.boost ? "⚡" : "") + Math.round(s.v), lx0 + 14, y + 12);
     g.font = "500 9px 'IBM Plex Mono',monospace";
     g.fillStyle = "#6E7A88";
     const gap = q === 0 ? "km/h" : "-" + Math.round(order[0].d - order[q].d) + " m";
@@ -5116,12 +5175,20 @@ function drawRace() {
     for (let f = 0.25; f < 1; f += 0.25) {
       g.beginPath(); g.moveTo(padL + trackW * f, y + 2); g.lineTo(padL + trackW * f, y + laneH - 2); g.stroke();
     }
+    if (race.comeback && s.energy > 0) {
+      g.fillStyle = "rgba(255,194,75,.48)";
+      g.fillRect(padL, y + laneH - 2, trackW * s.energy, 1.5);
+    }
     const x = X(s.dist);
     const grd = g.createLinearGradient(padL, 0, Math.max(padL + 1, x), 0);
     grd.addColorStop(0, "rgba(255,255,255,0)"); grd.addColorStop(1, col + "55");
     g.fillStyle = grd; g.fillRect(padL, y + 1, Math.max(0, x - padL), laneH - 2);
-    g.fillStyle = col;
     const car = Math.min(15, laneH * 0.5);
+    if (s.boost) {
+      g.fillStyle = "rgba(255,194,75,.22)";
+      g.beginPath(); g.arc(x - car * 0.35, y + laneH / 2, car * 1.7, 0, 7); g.fill();
+    }
+    g.fillStyle = col;
     g.beginPath();
     g.moveTo(x, y + laneH / 2); g.lineTo(x - car, y + 3);
     g.lineTo(x - car * 0.72, y + laneH / 2); g.lineTo(x - car, y + laneH - 3);
@@ -5214,7 +5281,11 @@ btnRaceLink.addEventListener("click", async () => {
     if (r.err) { sayRace(r.err, "bad"); return; }
     parts.push(encodeCfg(r.cfg));
   }
-  const url = location.href.split("#")[0] + "#" + parts.map((p, i) => RACE_KEYS[i] + "=" + p).join("&");
+  const raceArgs = parts.map((p, i) => RACE_KEYS[i] + "=" + p);
+  raceArgs.push("rule=" + encodeURIComponent(raceRuleSel.value));
+  raceArgs.push("course=" + encodeURIComponent(courseSel.value));
+  raceArgs.push("veh=" + encodeURIComponent(vehSel.value));
+  const url = location.href.split("#")[0] + "#" + raceArgs.join("&");
   const ok = await copyVia(codeIn, url);
   sayRace(ok ? "対戦リンクをコピーしました。開いた人は同じ組み合わせで走らせられます。"
              : "自動コピーできませんでした。上の共有欄にURLを出したので選択してコピーしてください。", ok ? "ok" : "bad");
@@ -5823,6 +5894,9 @@ function hashParams() {
 }
 function applyHash() {
   const hp = hashParams();
+  if (hp.rule === "comeback" || hp.rule === "real") raceRuleSel.value = hp.rule;
+  if (hp.course && COURSES[hp.course]) courseSel.value = hp.course;
+  if (hp.veh && VEHICLES[hp.veh]) vehSel.value = hp.veh;
   const cfgs = RACE_KEYS.map(k => (hp[k] ? decodeCfg(hp[k]) : null));
   const count = cfgs.reduce((n, c, i) => c ? i + 1 : n, 0);
   if (!count) return false;
