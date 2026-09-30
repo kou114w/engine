@@ -5249,7 +5249,7 @@ function liveStandingsLayout(w, n) {
   const cols = n > 7 && w >= 270 ? 2 : 1;
   const rows = Math.ceil(n / cols);
   const outer = 6, colW = Math.min(cols === 2 ? 154 : 190, Math.floor((w - outer * 2) / cols));
-  const headH = 18, rowH = n > 8 ? 13 : 14;
+  const headH = 20, rowH = n > 8 ? 15 : 16;
   return { cols, rows, outer, colW, headH, rowH,
     panelW: colW * cols, panelH: headH + rows * rowH + 4 };
 }
@@ -5267,7 +5267,7 @@ function drawLiveStandings(g, w, tt, at, order) {
   g.fillStyle = "#151B21"; g.fillRect(x0 + 1, y0 + 1, panelW - 2, headH - 1);
   g.textBaseline = "middle"; g.textAlign = "left";
   g.font = "600 9px 'IBM Plex Mono',monospace"; g.fillStyle = "#C8D2DD";
-  g.fillText("現在順位", x0 + 7, y0 + headH / 2 + .5);
+  g.fillText("現在順位 · km/h", x0 + 7, y0 + headH / 2 + .5);
   g.textAlign = "right"; g.fillStyle = "#6E7A88";
   g.fillText("T+" + Math.min(tt, race.dur).toFixed(1) + "s", x0 + panelW - 7, y0 + headH / 2 + .5);
   for (let q = 0; q < n; q++) {
@@ -5294,17 +5294,10 @@ function drawLiveStandings(g, w, tt, at, order) {
 /* ---- a curved course is drawn as the track itself, cars running on it ---- */
 function drawRaceMap(g, w, h, tt) {
   const cs = race.cs, sh = cs.shape, n = race.runs.length;
-  /* A phone cannot hold a track, thirteen moving nameplates and a narrow
-     standings column side by side.  On narrow screens (and for large fields)
-     the track gets the full width and the names move into a two-column table
-     below it.  The car colours tie the table back to the markers. */
+  /* Smaller canvases use shorter nameplates, while the course itself keeps the
+     full canvas. The single leaderboard above is the only separate text list. */
   const compact = w < 620 || n > 8;
-  const compactCols = n > 7 ? 2 : 1;
-  const compactRows = Math.ceil(n / compactCols);
-  const listH = compact ? Math.min(h * 0.46, 30 + compactRows * 18) : 0;
-  const mapH = compact ? h - listH : h;
-  const listW = compact ? 0 : Math.min(190, Math.max(126, w * 0.26));
-  const mapW = w - listW;
+  const mapH = h, mapW = w;
   /* The live order owns a band at the top. Course markers and nameplates are
      fitted only below it, so neither a start-line pack nor a later overtake
      can put a triangle underneath the leaderboard. */
@@ -5484,74 +5477,8 @@ function drawRaceMap(g, w, h, tt) {
   for (const p of nameplates) drawCarArrow(p);
   g.textBaseline = "alphabetic"; g.textAlign = "left";
 
-  /* Compact standings below the map: two columns give every name a fixed row,
-     so neither Japanese text nor speed figures can touch the next entry. */
-  if (compact) {
-    const top = mapH;
-    g.fillStyle = "#101419"; g.fillRect(0, top, w, h - top);
-    g.strokeStyle = "#252D36"; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(0, top + .5); g.lineTo(w, top + .5); g.stroke();
-    g.font = "500 9px 'IBM Plex Mono',monospace"; g.fillStyle = "#6E7A88";
-    g.textBaseline = "alphabetic"; g.textAlign = "left";
-    g.fillText(cs.name.replace(/（.*$/, "").trim(), 7, top + 13);
-    g.textAlign = "right";
-    g.fillText("T+" + Math.min(tt, race.dur).toFixed(2) + "s", w - 7, top + 13);
-    const rowTop = top + 20, colW = w / compactCols;
-    const rowH = Math.max(14, (h - rowTop - 3) / compactRows);
-    for (let q = 0; q < n; q++) {
-      const colNo = Math.floor(q / compactRows), rowNo = q % compactRows;
-      const x = colNo * colW, y = rowTop + rowNo * rowH;
-      const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
-      const strat = RACE_STRATEGIES[race.strategies[k]] || RACE_STRATEGIES.stalk;
-      if (rowNo % 2 === 0) { g.fillStyle = "rgba(255,255,255,.018)"; g.fillRect(x, y, colW, rowH); }
-      if (race.comeback && s.energy > 0) {
-        g.fillStyle = "rgba(255,194,75,.45)";
-        g.fillRect(x + 23, y + rowH - 2, Math.max(0, colW - 29) * s.energy, 1.5);
-      }
-      g.textBaseline = "middle";
-      g.textAlign = "left"; g.font = "600 10px 'IBM Plex Mono',monospace"; g.fillStyle = col;
-      g.fillText(String(q + 1) + strat.mark, x + 6, y + rowH / 2);
-      const raw = String(race.names[k] || laneName(k));
-      const nameX = x + 31, speedW = 48, maxNameW = Math.max(18, colW - 31 - speedW);
-      g.font = "500 9px 'IBM Plex Sans JP',sans-serif";
-      let lab = raw;
-      while (lab.length > 1 && g.measureText(lab).width > maxNameW) lab = lab.slice(0, -1);
-      if (lab !== raw) lab = lab.slice(0, Math.max(1, lab.length - 1)) + "…";
-      g.fillStyle = "#AEB9C6"; g.fillText(lab, nameX, y + rowH / 2);
-      g.textAlign = "right"; g.font = "600 9px 'IBM Plex Mono',monospace"; g.fillStyle = col;
-      g.fillText((s.boost ? "⚡" : "") + Math.round(s.v) + " km/h", x + colW - 6, y + rowH / 2);
-    }
-    g.textBaseline = "alphabetic"; g.textAlign = "left";
-    drawLiveStandings(g, w, tt, at, order);
-    return;
-  }
-
-  /* Desktop standings down the right-hand side. */
-  const lx0 = mapW + 10;
-  g.textAlign = "left";
-  g.font = "500 9px 'IBM Plex Mono',monospace"; g.fillStyle = "#5D6875";
-  g.fillText("T+" + Math.min(tt, race.dur).toFixed(2) + "s", lx0, 14);
-  g.fillText(cs.name.replace(/（.*$/, "").trim(), lx0, 26);
-  const rowH = Math.min(30, Math.max(14, (h - 44) / n));
-  for (let q = 0; q < n; q++) {
-    const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
-    const strat = RACE_STRATEGIES[race.strategies[k]] || RACE_STRATEGIES.stalk;
-    const y = 42 + q * rowH;
-    g.fillStyle = col;
-    g.font = "600 11px 'IBM Plex Mono',monospace";
-    g.fillText(String(q + 1) + strat.mark, lx0, y);
-    const nm = String(race.names[k] || laneName(k));
-    g.font = "500 10px 'IBM Plex Sans JP',sans-serif";
-    g.fillStyle = "#AEB9C6";
-    g.fillText(nm.length > 9 ? nm.slice(0, 9) + "…" : nm, lx0 + 14, y);
-    g.font = "600 11px 'IBM Plex Mono',monospace";
-    g.fillStyle = col;
-    g.fillText((s.boost ? "⚡" : "") + Math.round(s.v), lx0 + 14, y + 12);
-    g.font = "500 9px 'IBM Plex Mono',monospace";
-    g.fillStyle = "#6E7A88";
-    const gap = q === 0 ? "km/h" : "-" + Math.round(order[0].d - order[q].d) + " m";
-    g.fillText(gap, lx0 + 46, y + 12);
-  }
+  /* The live panel already contains order, names and speed. Keeping one list
+     avoids duplicate text competing with cars on both phones and desktops. */
   drawLiveStandings(g, w, tt, at, order);
 }
 
@@ -5640,20 +5567,6 @@ function drawRace() {
     g.fillStyle = col;
     g.fillText(nm, tx, my + 0.5);
     g.textBaseline = "alphabetic";
-
-    g.textAlign = "right";
-    g.fillStyle = col;
-    g.font = "600 " + (laneH < 22 ? 11 : 14) + "px 'IBM Plex Mono',monospace";
-    g.fillText(Math.round(s.v) + "", padL - 8, y + laneH / 2 + (laneH < 22 ? 4 : 5));
-    if (laneH >= 26) {
-      /* the gear and revs live at the far end of the lane, which is exactly
-         where the name lands once the car is close to the finish — so once the
-         label has fallen in behind the car, this moves to the near end */
-      g.font = "500 9px 'IBM Plex Mono',monospace"; g.fillStyle = "#6E7A88";
-      g.textAlign = ahead ? "right" : "left";
-      g.fillText("G" + s.gear + " · " + Math.round(s.rpm) + " rpm",
-        ahead ? padL + trackW - 7 : padL + 7, y + laneH - 8);
-    }
   }
 
   const bandBottom = top + n * (laneH + gap) - gap;
@@ -5662,8 +5575,6 @@ function drawRace() {
   g.setLineDash([]);
   g.fillStyle = "#5D6875"; g.font = "500 9px 'IBM Plex Mono',monospace"; g.textAlign = "right";
   g.fillText((race.target >= 999 ? "1000" : Math.round(race.target)) + " m", padL + trackW - 3, top - 6);
-  g.textAlign = "left";
-  g.fillText("T+" + Math.min(tt, race.dur).toFixed(2) + "s", padL, top - 6);
 
   const cy0 = bandBottom + 22, ch = h - cy0 - 16;
   if (ch > 24) {
