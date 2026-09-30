@@ -232,10 +232,12 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .laneinfo .combo{color:var(--spark)}
 .laneinfo.bad{color:var(--danger)}
 @media (max-width:640px){.racegrid{grid-template-columns:1fr}}
-#race{aspect-ratio:16/6.2;width:100%;display:block}
+#race{aspect-ratio:16/9;width:100%;display:block}
+#race.mid{aspect-ratio:16/10}
+#race.many{aspect-ratio:16/13}
 #racePanel[hidden]{display:none}
-@media (max-width:760px){#race{aspect-ratio:16/8.5}}
-@media (max-width:620px){#race.many{aspect-ratio:1/1!important}}
+@media (max-width:760px){#race,#race.mid{aspect-ratio:4/3}}
+@media (max-width:620px){#race.many{aspect-ratio:4/5!important}}
 .resultgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule-soft);border-top:1px solid var(--rule-soft)}
 @media (max-width:520px){.resultgrid{grid-template-columns:1fr}}
 .rescard{background:var(--panel);padding:11px 13px}
@@ -4908,8 +4910,9 @@ function buildLanes(n) {
   }
   const raceCanvas = document.getElementById("race");
   if (raceCanvas) {
+    raceCanvas.classList.toggle("mid", n >= 5 && n < 9);
     raceCanvas.classList.toggle("many", n >= 9);
-    raceCanvas.style.aspectRatio = n >= 9 ? "16 / 11" : n >= 5 ? "16 / 7.5" : "16 / 6.2";
+    raceCanvas.style.removeProperty("aspect-ratio");
   }
   for (let i = 0; i < n; i++) laneChanged(i, 0);
 }
@@ -5141,6 +5144,7 @@ function drawRaceMap(g, w, h, tt) {
   const order = at.map((s, k) => ({ k, d: s.dist })).sort((a, b) => b.d - a.d);
 
   /* the cars */
+  const nameplates = [];
   for (let q = n - 1; q >= 0; q--) {
     const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
     let i = Math.round(Math.min(s.dist, cs.total) / cs.ds);
@@ -5165,29 +5169,62 @@ function drawRaceMap(g, w, h, tt) {
       g.strokeStyle = "#FFC24B"; g.lineWidth = 1.2;
       g.beginPath(); g.arc(cx, cy, r * 1.9, 0, 7); g.stroke();
     }
-    /* Moving nameplates are useful with a small desktop field. With many cars
-       they inevitably collide around braking zones, so the compact layout
-       keeps every full name in the standings instead. */
-    if (!compact && n <= 6) {
-      const nm = String(race.names[k] || laneName(k));
-      const lab = nm.length > 12 ? nm.slice(0, 12) + "…" : nm;
-      g.font = "600 10px 'IBM Plex Sans JP',sans-serif";
-      const twd = g.measureText(lab).width;
-      const off = r + 11 + (k % 3) * 9;
-      let lx = cx - Math.sin(ang) * off;
-      let ly = cy + Math.cos(ang) * off;
-      lx = Math.max(twd / 2 + 4, Math.min(mapW - twd / 2 - 4, lx));
-      ly = Math.max(9, Math.min(mapH - 9, ly));
-      g.strokeStyle = col; g.globalAlpha = 0.35; g.lineWidth = 1;
-      g.beginPath(); g.moveTo(cx, cy); g.lineTo(lx, ly); g.stroke();
-      g.globalAlpha = 1;
-      g.fillStyle = "rgba(9,11,14,.82)";
-      g.fillRect(lx - twd / 2 - 3, ly - 7, twd + 6, 14);
-      g.textAlign = "center"; g.textBaseline = "middle";
-      g.fillStyle = col; g.fillText(lab, lx, ly);
-      g.textBaseline = "alphabetic"; g.textAlign = "left";
-    }
+    nameplates.push({ k, cx, cy, ang, r, col });
   }
+
+  /* Names stay attached to the triangular cars, including a thirteen-car
+     phone race. Candidate positions fan out around a pack and the least
+     overlapping one wins; the full unshortened name remains in standings. */
+  const placed = [];
+  for (const p of nameplates) {
+    const raw = String(race.names[p.k] || laneName(p.k));
+    const maxChars = compact ? 8 : 12;
+    const lab = raw.length > maxChars ? raw.slice(0, maxChars) + "…" : raw;
+    const fs = compact ? (n > 8 ? 8 : 9) : 10;
+    g.font = "600 " + fs + "px 'IBM Plex Sans JP',sans-serif";
+    const twd = g.measureText(lab).width, ph = fs + 6, pw = twd + 7;
+    const nx = -Math.sin(p.ang), ny = Math.cos(p.ang);
+    const tx = Math.cos(p.ang), ty = Math.sin(p.ang);
+    const side = p.k % 2 ? 1 : -1;
+    const near = p.r + 10;
+    const candidates = [];
+    /* A packed finish can put thirteen triangles within a few pixels. Search
+       several rings instead of reusing the same eight slots, while trying
+       the car's outside edge first so an isolated car still looks natural. */
+    const start = Math.atan2(ny * side, nx * side) + (p.k % 3 - 1) * .12;
+    const rings = compact ? [near, near + 15, near + 31, near + 49, near + 68]
+                          : [near, near + 17, near + 36, near + 58];
+    for (const rad of rings) {
+      for (let q = 0; q < 16; q++) {
+        const a = start + (q < 2 ? (q ? Math.PI : 0) : ((q - 1) * Math.PI / 8));
+        candidates.push([Math.cos(a) * rad, Math.sin(a) * rad]);
+      }
+    }
+    let best = null;
+    for (const d of candidates) {
+      const lx = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + d[0]));
+      const ly = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + d[1]));
+      const box = { x: lx - pw / 2, y: ly - ph / 2, w: pw, h: ph };
+      let overlap = 0;
+      for (const b of placed) {
+        const ow = Math.max(0, Math.min(box.x + box.w, b.x + b.w) - Math.max(box.x, b.x));
+        const oh = Math.max(0, Math.min(box.y + box.h, b.y + b.h) - Math.max(box.y, b.y));
+        overlap += ow * oh;
+      }
+      const score = overlap * 100 + Math.hypot(lx - p.cx, ly - p.cy);
+      if (!best || score < best.score) best = { lx, ly, box, score };
+      if (overlap === 0 && Math.hypot(lx - p.cx, ly - p.cy) <= near + 1) break;
+    }
+    placed.push(best.box);
+    g.strokeStyle = p.col; g.globalAlpha = .42; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(p.cx, p.cy); g.lineTo(best.lx, best.ly); g.stroke();
+    g.globalAlpha = 1;
+    g.fillStyle = "rgba(9,11,14,.88)";
+    g.fillRect(best.box.x, best.box.y, best.box.w, best.box.h);
+    g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = p.col;
+    g.fillText(lab, best.lx, best.ly + .5);
+  }
+  g.textBaseline = "alphabetic"; g.textAlign = "left";
 
   /* Compact standings below the map: two columns give every name a fixed row,
      so neither Japanese text nor speed figures can touch the next entry. */
@@ -5322,9 +5359,7 @@ function drawRace() {
        falls in behind once the car nears the finish, so it never runs off the
        track or sits under the finish line. */
     const raw = String(race.names[k] || laneName(k));
-    const strat = RACE_STRATEGIES[race.strategies[k]] || RACE_STRATEGIES.stalk;
-    const marked = "[" + strat.mark + "] " + raw;
-    const nm = marked.length > 14 ? marked.slice(0, 14) + "…" : marked;
+    const nm = raw.length > 14 ? raw.slice(0, 14) + "…" : raw;
     const fs = laneH < 20 ? 9 : laneH < 26 ? 10 : 11;
     g.font = "600 " + fs + "px 'IBM Plex Sans JP',sans-serif";
     const tw = g.measureText(nm).width;
