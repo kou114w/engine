@@ -5025,7 +5025,7 @@ async function startRace() {
     dur: Math.max.apply(null, runs.map((r, i) => r.len / r.sr)),
     sampleRate: runs[0].sr, audioBuf: null,
     t0: 0, playing: false, src: null, revealed: false,
-    labelLayout: [], labelStamp: 0
+    labelLayout: []
   };
   btnRace.disabled = false; btnRace.textContent = "レース開始";
   btnRaceReplay.disabled = false;
@@ -5042,7 +5042,7 @@ async function playRace() {
   race.revealed = false; raceResult.hidden = true;
   /* Start every replay from the natural label slots. Keeping the previous
      finish layout would make the labels slide across the map at the restart. */
-  race.labelLayout = []; race.labelStamp = 0;
+  race.labelLayout = [];
   raceInfo.firstChild.textContent = race.comeback ? "走行中 · レースバトル" : "走行中";
   clearTimeout(race.revealTimer);
   /* the verdict must not depend on anything being drawn: a collapsed panel or a
@@ -5281,9 +5281,6 @@ function drawRaceMap(g, w, h, tt) {
      make their labels swap sides continuously. Car index is stable for the
      whole race, so it is the deterministic placement priority. */
   const labelplates = nameplates.slice().sort((a, b) => a.k - b.k);
-  const stamp = performance.now() / 1000;
-  const labelDt = race.labelStamp ? clamp(stamp - race.labelStamp, 1 / 120, .08) : .08;
-  race.labelStamp = stamp;
   if (!race.labelLayout) race.labelLayout = [];
   for (const p of labelplates) {
     const raw = String(race.names[p.k] || laneName(p.k));
@@ -5292,72 +5289,45 @@ function drawRaceMap(g, w, h, tt) {
     const fs = compact ? (n > 8 ? 8 : 9) : 10;
     g.font = "600 " + fs + "px 'IBM Plex Sans JP',sans-serif";
     const twd = g.measureText(lab).width, ph = fs + 6, pw = twd + 7;
-    const nx = -Math.sin(p.ang), ny = Math.cos(p.ang);
-    const tx = Math.cos(p.ang), ty = Math.sin(p.ang);
-    const side = p.k % 2 ? 1 : -1;
-    const near = p.r + 10;
-    const candidates = [];
-    /* A packed finish can put thirteen triangles within a few pixels. Search
-       several rings instead of reusing the same eight slots, while trying
-       the car's outside edge first so an isolated car still looks natural. */
-    const start = Math.atan2(ny * side, nx * side) + (p.k % 3 - 1) * .12;
-    const rings = compact ? [near, near + 15, near + 31, near + 49, near + 68]
-                          : [near, near + 17, near + 36, near + 58];
-    for (const rad of rings) {
-      for (let q = 0; q < 16; q++) {
-        const a = start + (q < 2 ? (q ? Math.PI : 0) : ((q - 1) * Math.PI / 8));
-        candidates.push([Math.cos(a) * rad, Math.sin(a) * rad]);
-      }
-    }
-    let best = null;
-    const tested = [];
-    for (let ci = 0; ci < candidates.length; ci++) {
-      const d = candidates[ci];
-      const lx = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + d[0]));
-      const ly = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + d[1]));
-      const box = { x: lx - pw / 2, y: ly - ph / 2, w: pw, h: ph };
-      let overlap = 0;
-      for (const b of placed) {
-        const ow = Math.max(0, Math.min(box.x + box.w, b.x + b.w) - Math.max(box.x, b.x));
-        const oh = Math.max(0, Math.min(box.y + box.h, b.y + b.h) - Math.max(box.y, b.y));
-        overlap += ow * oh;
-      }
-      const score = overlap * 100 + Math.hypot(lx - p.cx, ly - p.cy);
-      const choice = { lx, ly, box, score, overlap, ci };
-      tested.push(choice);
-      if (!best || score < best.score) best = choice;
-    }
-
-    /* Keep the chosen slot while it is still usable. A few pixels of contact
-       are preferable to switching between two equally good sides every frame.
-       Once the pack opens, wait briefly before returning to a nearer slot. */
     let state = race.labelLayout[p.k];
-    if (!state) state = race.labelLayout[p.k] = { slot: best.ci, dx: best.lx - p.cx,
-      dy: best.ly - p.cy, ready: false, calm: 0 };
-    const old = tested[state.slot];
-    const tolerance = Math.max(2, pw * ph * .004);
-    if (old && old.overlap <= best.overlap + tolerance) {
-      if (best.ci !== state.slot && best.overlap === 0 && old.overlap === 0
-          && best.score + 10 < old.score) {
-        state.calm += labelDt;
-        if (state.calm < .65) best = old;
-        else state.calm = 0;
-      } else {
-        best = old; state.calm = 0;
+    if (!state) {
+      const nx = -Math.sin(p.ang), ny = Math.cos(p.ang);
+      const side = p.k % 2 ? 1 : -1;
+      const near = p.r + 10, candidates = [];
+      /* Assign every car once, while the starting pack is together. Searching
+         several rings handles all thirteen cars; after this first draw the
+         screen-relative offset is pinned for the entire replay. */
+      const start = Math.atan2(ny * side, nx * side) + (p.k % 3 - 1) * .12;
+      const rings = compact ? [near, near + 15, near + 31, near + 49, near + 68]
+                            : [near, near + 17, near + 36, near + 58];
+      for (const rad of rings) {
+        for (let q = 0; q < 16; q++) {
+          const a = start + (q < 2 ? (q ? Math.PI : 0) : ((q - 1) * Math.PI / 8));
+          candidates.push([Math.cos(a) * rad, Math.sin(a) * rad]);
+        }
       }
-    } else state.calm = 0;
-    state.slot = best.ci;
-
-    /* Smooth the relative offset rather than the absolute screen position.
-       The plate therefore follows its car immediately, but a necessary slot
-       change glides into place instead of teleporting or shaking. */
-    const targetDx = best.lx - p.cx, targetDy = best.ly - p.cy;
-    const ease = state.ready ? 1 - Math.exp(-12 * labelDt) : 1;
-    state.dx += (targetDx - state.dx) * ease;
-    state.dy += (targetDy - state.dy) * ease;
-    state.ready = true;
-    const lx = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + state.dx));
-    const ly = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + state.dy));
+      let best = null;
+      for (let ci = 0; ci < candidates.length; ci++) {
+        const d = candidates[ci];
+        const lx0 = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + d[0]));
+        const ly0 = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + d[1]));
+        const box0 = { x: lx0 - pw / 2, y: ly0 - ph / 2, w: pw, h: ph };
+        let overlap = 0;
+        for (const b of placed) {
+          const ow = Math.max(0, Math.min(box0.x + box0.w, b.x + b.w) - Math.max(box0.x, b.x));
+          const oh = Math.max(0, Math.min(box0.y + box0.h, b.y + b.h) - Math.max(box0.y, b.y));
+          overlap += ow * oh;
+        }
+        const score = overlap * 100 + Math.hypot(lx0 - p.cx, ly0 - p.cy);
+        if (!best || score < best.score) best = { lx: lx0, ly: ly0, score, ci };
+      }
+      state = race.labelLayout[p.k] = { slot: best.ci,
+        homeDx: best.lx - p.cx, homeDy: best.ly - p.cy };
+    }
+    /* Never choose another side later. The car and plate travel together in
+       screen space, so a pass or a temporary overlap cannot start an oscillation. */
+    const lx = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + state.homeDx));
+    const ly = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + state.homeDy));
     const box = { x: lx - pw / 2, y: ly - ph / 2, w: pw, h: ph };
     placed.push(box);
     g.strokeStyle = p.col; g.globalAlpha = .42; g.lineWidth = 1;
