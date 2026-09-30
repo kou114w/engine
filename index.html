@@ -5024,7 +5024,8 @@ async function startRace() {
     veh, cs, target: cs.total, comeback,
     dur: Math.max.apply(null, runs.map((r, i) => r.len / r.sr)),
     sampleRate: runs[0].sr, audioBuf: null,
-    t0: 0, playing: false, src: null, revealed: false
+    t0: 0, playing: false, src: null, revealed: false,
+    labelLayout: [], labelStamp: 0
   };
   btnRace.disabled = false; btnRace.textContent = "レース開始";
   btnRaceReplay.disabled = false;
@@ -5039,6 +5040,9 @@ async function playRace() {
   if (!race) return;
   if (race.src) { try { race.src.stop(); } catch (e) { /* already done */ } race.src = null; }
   race.revealed = false; raceResult.hidden = true;
+  /* Start every replay from the natural label slots. Keeping the previous
+     finish layout would make the labels slide across the map at the restart. */
+  race.labelLayout = []; race.labelStamp = 0;
   raceInfo.firstChild.textContent = race.comeback ? "走行中 · レースバトル" : "走行中";
   clearTimeout(race.revealTimer);
   /* the verdict must not depend on anything being drawn: a collapsed panel or a
@@ -5272,7 +5276,16 @@ function drawRaceMap(g, w, h, tt) {
      phone race. Candidate positions fan out around a pack and the least
      overlapping one wins; the full unshortened name remains in standings. */
   const placed = [];
-  for (const p of nameplates) {
+  /* Placement must not depend on the live race order: when two cars exchange
+     places, rear-to-front ordering changes every frame and a greedy solver can
+     make their labels swap sides continuously. Car index is stable for the
+     whole race, so it is the deterministic placement priority. */
+  const labelplates = nameplates.slice().sort((a, b) => a.k - b.k);
+  const stamp = performance.now() / 1000;
+  const labelDt = race.labelStamp ? clamp(stamp - race.labelStamp, 1 / 120, .08) : .08;
+  race.labelStamp = stamp;
+  if (!race.labelLayout) race.labelLayout = [];
+  for (const p of labelplates) {
     const raw = String(race.names[p.k] || laneName(p.k));
     const maxChars = compact ? 8 : 12;
     const lab = raw.length > maxChars ? raw.slice(0, maxChars) + "…" : raw;
@@ -5297,7 +5310,9 @@ function drawRaceMap(g, w, h, tt) {
       }
     }
     let best = null;
-    for (const d of candidates) {
+    const tested = [];
+    for (let ci = 0; ci < candidates.length; ci++) {
+      const d = candidates[ci];
       const lx = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + d[0]));
       const ly = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + d[1]));
       const box = { x: lx - pw / 2, y: ly - ph / 2, w: pw, h: ph };
@@ -5308,17 +5323,50 @@ function drawRaceMap(g, w, h, tt) {
         overlap += ow * oh;
       }
       const score = overlap * 100 + Math.hypot(lx - p.cx, ly - p.cy);
-      if (!best || score < best.score) best = { lx, ly, box, score };
-      if (overlap === 0 && Math.hypot(lx - p.cx, ly - p.cy) <= near + 1) break;
+      const choice = { lx, ly, box, score, overlap, ci };
+      tested.push(choice);
+      if (!best || score < best.score) best = choice;
     }
-    placed.push(best.box);
+
+    /* Keep the chosen slot while it is still usable. A few pixels of contact
+       are preferable to switching between two equally good sides every frame.
+       Once the pack opens, wait briefly before returning to a nearer slot. */
+    let state = race.labelLayout[p.k];
+    if (!state) state = race.labelLayout[p.k] = { slot: best.ci, dx: best.lx - p.cx,
+      dy: best.ly - p.cy, ready: false, calm: 0 };
+    const old = tested[state.slot];
+    const tolerance = Math.max(2, pw * ph * .004);
+    if (old && old.overlap <= best.overlap + tolerance) {
+      if (best.ci !== state.slot && best.overlap === 0 && old.overlap === 0
+          && best.score + 10 < old.score) {
+        state.calm += labelDt;
+        if (state.calm < .65) best = old;
+        else state.calm = 0;
+      } else {
+        best = old; state.calm = 0;
+      }
+    } else state.calm = 0;
+    state.slot = best.ci;
+
+    /* Smooth the relative offset rather than the absolute screen position.
+       The plate therefore follows its car immediately, but a necessary slot
+       change glides into place instead of teleporting or shaking. */
+    const targetDx = best.lx - p.cx, targetDy = best.ly - p.cy;
+    const ease = state.ready ? 1 - Math.exp(-12 * labelDt) : 1;
+    state.dx += (targetDx - state.dx) * ease;
+    state.dy += (targetDy - state.dy) * ease;
+    state.ready = true;
+    const lx = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + state.dx));
+    const ly = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + state.dy));
+    const box = { x: lx - pw / 2, y: ly - ph / 2, w: pw, h: ph };
+    placed.push(box);
     g.strokeStyle = p.col; g.globalAlpha = .42; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(p.cx, p.cy); g.lineTo(best.lx, best.ly); g.stroke();
+    g.beginPath(); g.moveTo(p.cx, p.cy); g.lineTo(lx, ly); g.stroke();
     g.globalAlpha = 1;
     g.fillStyle = "rgba(9,11,14,.88)";
-    g.fillRect(best.box.x, best.box.y, best.box.w, best.box.h);
+    g.fillRect(box.x, box.y, box.w, box.h);
     g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = p.col;
-    g.fillText(lab, best.lx, best.ly + .5);
+    g.fillText(lab, lx, ly + .5);
   }
   /* Labels and their backgrounds cannot cover the direction arrows. Cars are
      ordered rear-to-front, so the leader remains the topmost marker. */
