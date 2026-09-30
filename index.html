@@ -409,6 +409,13 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           </div>
           <div class="ctl" style="margin-top:16px">
             <div class="row"><span class="lab">8桁の番号を発行<small>Number</small></span></div>
+            <select id="numStrategy" aria-label="番号に含める作戦" style="margin-bottom:9px">
+              <option value="auto" selected>作戦：自動</option>
+              <option value="front">作戦：逃げ</option>
+              <option value="stalk">作戦：先行</option>
+              <option value="closer">作戦：差し</option>
+              <option value="deep">作戦：追込</option>
+            </select>
             <div class="numrow">
               <button class="btn-ghost" id="btnIssue">番号を発行</button>
               <div class="numout none" id="numOut">— — — —</div>
@@ -528,7 +535,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           <p><b>3 · 排気管の音響</b> — 排気弁から出た圧力パルスをデジタル導波路（進行波・後退波の遅延線）に注入し、集合部の散乱接合と管端反射を解いています。管長を変えると脈動が変わり、音色と充填効率の両方が動きます。</p>
           <p><b>4 · 使い方</b> — 「エンジン始動」でセルが回ります。スロットルバーを押さえて（PC では <kbd>Space</kbd> でも）吹かせます。「ダイナモ計測」は同じ物理モデルを高速で回してトルク・出力曲線を出します。</p>
           <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。「リアル」では作戦補助を完全に切れます。</p>
-          <p><b>6 · 共有</b> — 「コードをコピー」で組んだ細かな仕様がそのまま文字列になります。「番号を発行」を押すと、サーバーなしで別のスマホやPCでも読める8桁の合言葉になります。8桁版は主要設定を段階値に圧縮し、E4コードとURLは全設定を正確に保持します。</p>
+          <p><b>6 · 共有</b> — 「コードをコピー」で組んだ細かな仕様がそのまま文字列になります。番号発行欄で作戦を選んで「番号を発行」を押すと、エンジンと作戦を別のスマホやPCでも読める8桁の合言葉にできます。8桁版は主要設定を段階値に圧縮し、E4コードとURLは全設定を正確に保持します。</p>
           <p><b>7 · スマホでは</b> — パネル見出しをタップで開閉、下端の「負荷・保持」で負荷・Dyno hold・スロットル保持が出ます。スロットル保持を入れると指を離しても開度が残るので、片手で音の変化を追えます。音が出ないときは端末のマナーモードを確認してください。</p>
           <p style="margin-top:12px;color:#5D6875">着想元は AngeTheGreat の <a href="https://www.engine-sim.parts/" target="_blank" rel="noopener" style="color:#7C8896">engine-sim.parts</a>。あちらと同じく、これは音とレスポンスの再現を目的としたモデルで、エンジン設計の数値保証をするものではありません。</p>
         </div>
@@ -4240,7 +4247,8 @@ const codeOut = document.getElementById("codeOut"), codeIn = document.getElement
   btnCopyUrl = document.getElementById("btnCopyUrl"),
   btnLoadCode = document.getElementById("btnLoadCode"),
   btnIssue = document.getElementById("btnIssue"), numOut = document.getElementById("numOut"),
-  btnNumCopy = document.getElementById("btnNumCopy");
+  btnNumCopy = document.getElementById("btnNumCopy"),
+  numStrategy = document.getElementById("numStrategy");
 let lastNumber = "";
 
 function say(text, cls) {
@@ -4297,18 +4305,27 @@ function showNumber(n) {
 }
 
 /* A full E4 build does not fit into eight decimal digits.  The public build
-   therefore also has a compact, self-contained form: codes beginning with 9
-   carry the ten visible engine choices at carefully chosen coarse steps.  The
-   exact build is still remembered on the issuing browser, while another phone
-   or PC can reconstruct the compact build from the eight digits alone. */
+   therefore also has a compact, self-contained form. New codes begin with
+   4–8: that first digit carries the race strategy, while the remaining digits
+   carry the visible engine choices at carefully chosen coarse steps. Legacy
+   9-prefixed numbers remain valid and decode with automatic strategy. */
 const NUMS = "cc.numbers";
-const COMPACT_MAGIC = 90000000;
 const COMPACT_RADIX = [12, 5, 16, 8, 4, 3, 3, 3, 3];
 const COMPACT_PORT = [650, 1250, 2300];
 const COMPACT_CAM = [0.20, 0.36, 0.68];
 const COMPACT_AFR = [12.4, 13.2, 15.2];
 const COMPACT_ADV = [14, 22, 32];
 const COMPACT_BANK = [45, 60, 90];
+const NUMBER_STRATEGIES = ["auto", "front", "stalk", "closer", "deep"];
+const NUMBER_MAGIC = { auto: 40000000, front: 50000000, stalk: 60000000, closer: 70000000, deep: 80000000 };
+
+function cleanNumberStrategy(v) {
+  return NUMBER_STRATEGIES.includes(String(v || "")) ? String(v) : "auto";
+}
+function numberStrategyName(v) {
+  const k = cleanNumberStrategy(v);
+  return k === "auto" ? "自動" : RACE_STRATEGIES[k].name;
+}
 
 function nearestIndex(a, v) {
   let best = 0;
@@ -4320,7 +4337,7 @@ function compactCheck(x) {
   v ^= v >>> 16; v ^= v >>> 8; v ^= v >>> 4;
   return Math.imul(v ^ (v >>> 7), 0x45d9f3b) >>> 0 & 3;
 }
-function compactNumberEncode(c) {
+function compactNumberEncode(c, strategy) {
   const disp = clamp(dispOf(c), 0.4, 8);
   const arch = c.layout === "I" ? 0 : c.layout === "B" ? 1 : 2 + nearestIndex(COMPACT_BANK, c.bankAngle);
   const vals = [
@@ -4334,11 +4351,14 @@ function compactNumberEncode(c) {
   ];
   let payload = 0, mul = 1;
   for (let i = 0; i < vals.length; i++) { payload += vals[i] * mul; mul *= COMPACT_RADIX[i]; }
-  return String(COMPACT_MAGIC + payload * 4 + compactCheck(payload));
+  return String(NUMBER_MAGIC[cleanNumberStrategy(strategy)] + payload * 4 + compactCheck(payload));
 }
 function compactNumberDecode(number) {
-  if (!/^9[0-9]{7}$/.test(String(number || ""))) return null;
-  const raw = Number(number) - COMPACT_MAGIC;
+  const text = String(number || "");
+  if (!/^[4-9][0-9]{7}$/.test(text)) return null;
+  const lead = +text[0];
+  const strategy = lead === 9 ? "auto" : NUMBER_STRATEGIES[lead - 4];
+  const raw = Number(text) - lead * 10000000;
   if (raw < 0) return null;
   let payload = Math.floor(raw / 4), total = 1;
   for (const r of COMPACT_RADIX) total *= r;
@@ -4365,7 +4385,7 @@ function compactNumberDecode(number) {
   c.redline = clamp(Math.round((24 * 60 / (2 * c.stroke / 1000)) / 100) * 100, 4000, 12000);
   c.inertia = clamp(+(0.10 + c.n * 0.014 + want * 0.025).toFixed(3), 0.13, 0.9);
   c.portEx = clamp(Math.round(c.portIn * 1.6), 600, 3200);
-  return c;
+  return { cfg: c, strategy };
 }
 function numTable() {
   let t = null;
@@ -4374,7 +4394,8 @@ function numTable() {
 }
 function numRemember(n, payload) {
   const t = numTable();
-  t[n] = { code: payload.code, engine: payload.engine, at: payload.at };
+  t[n] = { code: payload.code, engine: payload.engine, at: payload.at,
+    strategy: cleanNumberStrategy(payload.strategy) };
   const keys = Object.keys(t);
   if (keys.length > 400) {                      // keep the newest few hundred
     keys.sort((a, b) => (t[b].at || 0) - (t[a].at || 0)).slice(400).forEach(k => delete t[k]);
@@ -4385,49 +4406,31 @@ function numLocal(n) {
   const row = numTable()[n];
   if (!row) return null;
   const c = decodeCfg(row.code);
-  return c ? c : null;
+  return c ? { cfg: c, strategy: cleanNumberStrategy(row.strategy) } : null;
 }
 
 async function issueNumber() {
-  const db = await dbReady;
   btnIssue.disabled = true;
   say("番号を用意しています…", "");
-  const payload = { code: encodeCfg(cfg), engine: describeCfg(cfg), at: Date.now() };
-  /* 90xxxxxx–99xxxxxx is reserved for the self-contained public format. */
-  const draw = () => String(Math.floor(10000000 + Math.random() * 80000000));
-
-  if (!db) {
-    const n = compactNumberEncode(cfg);
-    numRemember(n, payload);
-    showNumber(n);
-    btnIssue.disabled = false;
-    say("番号を発行しました。この8桁だけで、別のスマホやPCからも読み込めます。完全に同じ細かな値を渡す場合はE4コードかURLを使ってください。", "ok");
-    return;
-  }
-  for (let k = 0; k < 6; k++) {
-    const n = draw();
-    try {
-      const snap = await db.doc("codes/" + n).get();
-      if (snap.exists) continue;                       // already taken, draw again
-      await db.doc("codes/" + n).set(payload);
-      numRemember(n, payload);
-      showNumber(n);
-      say("番号を発行しました。相手がこの8桁を入れると、このエンジンが読み込まれます。", "ok");
-      btnIssue.disabled = false;
-      return;
-    } catch (e) { /* try another number */ }
-  }
+  const strategy = cleanNumberStrategy(numStrategy.value);
+  const payload = { code: encodeCfg(cfg), engine: describeCfg(cfg), at: Date.now(), strategy };
+  /* Always issue the self-contained form. It works across the artifact,
+     GitHub Pages, local files, phones and PCs without a shared database. */
+  const n = compactNumberEncode(cfg, strategy);
+  numRemember(n, payload);
+  showNumber(n);
   btnIssue.disabled = false;
-  say("番号を発行できませんでした。時間をおいて試してください。", "bad");
+  say("番号を発行しました。エンジン設定と作戦「" + numberStrategyName(strategy)
+    + "」を、この8桁だけで別のスマホやPCから読み込めます。", "ok");
 }
 
 async function lookupNumber(n) {
   const local = numLocal(n);
-  if (local) return { cfg: local };
+  if (local) return local;
   const db = await dbReady;
   if (!db) {
     const compact = compactNumberDecode(n);
-    return compact ? { cfg: compact, compact: true }
+    return compact ? Object.assign({ compact: true }, compact)
       : { err: "その番号は見つかりません。数字8桁を確かめてください。以前の端末専用番号なら、書き出した garage.json の取り込みが必要です。" };
   }
   let snap;
@@ -4435,14 +4438,15 @@ async function lookupNumber(n) {
   catch (e) { return { err: "番号を照会できませんでした。" }; }
   if (!snap.exists) {
     const compact = compactNumberDecode(n);
-    return compact ? { cfg: compact, compact: true }
+    return compact ? Object.assign({ compact: true }, compact)
       : { err: "その番号は見つかりません。桁を確かめてください。" };
   }
   const row = snap.data() || {};
   const c = decodeCfg(row.code);
   if (!c) return { err: "その番号の中身を読み取れませんでした。" };
-  numRemember(n, { code: String(row.code), engine: String(row.engine || ""), at: Date.now() });
-  return { cfg: c };
+  const strategy = cleanNumberStrategy(row.strategy);
+  numRemember(n, { code: String(row.code), engine: String(row.engine || ""), at: Date.now(), strategy });
+  return { cfg: c, strategy };
 }
 
 const digitsOf = v => String(v || "").replace(/[^0-9]/g, "");
@@ -4480,7 +4484,9 @@ btnLoadCode.addEventListener("click", async () => {
     const r = await lookupNumber(d);
     if (!r.cfg) { say(r.err, "bad"); return; }
     if (!applyLoaded(r.cfg)) { say("番号は確認できましたが、設定項目がロック中です。錠前を解除してからもう一度読み込んでください。", "bad"); return; }
-    say(describeCfg(r.cfg) + (r.compact ? " を8桁番号から復元しました。" : " を読み込みました。"), "ok");
+    numStrategy.value = cleanNumberStrategy(r.strategy);
+    say(describeCfg(r.cfg) + (r.compact ? " を8桁番号から復元しました。" : " を読み込みました。")
+      + " 作戦は「" + numberStrategyName(r.strategy) + "」です。", "ok");
     return;
   }
   const c = decodeCfg(raw);
@@ -4494,7 +4500,8 @@ codeIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefa
 if (window.top === window.self && /^https?:$/.test(location.protocol)) btnCopyUrl.hidden = false;
 
 /* ---------- the number, and how it travels ----------
-   New 9-prefixed numbers are self-contained and travel without a server.
+   New 4–8-prefixed numbers are self-contained and carry a race strategy.
+   Legacy 9-prefixed numbers remain self-contained with automatic strategy.
    The local table and imports remain for older exact stored numbers. */
 const numState = document.getElementById("numState"),
   btnNumExport = document.getElementById("btnNumExport"),
@@ -4514,7 +4521,8 @@ function takeNumbers(map) {
     const row = map[k];
     if (!row || typeof row !== "object" || !decodeCfg(row.code)) continue;
     numRemember(k, { code: String(row.code).slice(0, 200),
-      engine: String(row.engine || "").slice(0, 40), at: Number(row.at) || Date.now() });
+      engine: String(row.engine || "").slice(0, 40), at: Number(row.at) || Date.now(),
+      strategy: cleanNumberStrategy(row.strategy) });
     n++;
   }
   return n;
@@ -4522,8 +4530,8 @@ function takeNumbers(map) {
 
 async function initNumbers() {
   const db = await dbReady;
-  if (db) { numState.textContent = "リンクを開いた全員で共有"; return; }
-  numState.textContent = "9で始まる番号はサーバー不要 · どの端末でも読込可能";
+  if (db) { numState.textContent = "4〜9で始まる番号にエンジンと作戦を保存"; return; }
+  numState.textContent = "4〜9で始まる番号はサーバー不要 · エンジンと作戦を保存";
   btnNumExport.hidden = false; btnNumImport.hidden = false;
   if (!lsSet("cc.probe", "1")) {
     say("このブラウザは保存を許可していないので、発行した番号はタブを閉じると消えます。書き出しておいてください。", "bad");
@@ -4677,7 +4685,8 @@ async function resolveLane(sel, input, label, nameInp) {
     if (!/^E[0-9]-/i.test(raw) && d.length === 8) {
       const r = await lookupNumber(d);
       if (!r.cfg) return { err: label + "：" + r.err };
-      return named({ cfg: r.cfg, label: d.slice(0, 4) + " " + d.slice(4) });
+      return named({ cfg: r.cfg, label: d.slice(0, 4) + " " + d.slice(4),
+        numberStrategy: cleanNumberStrategy(r.strategy) });
     }
     const c = decodeCfg(raw);
     if (!c) return { err: label + "：8桁の番号か、E4- で始まるコードを入れてください。" };
@@ -4718,7 +4727,9 @@ function fillPower(spec, c, el) {
 function renderLaneInfo(el, spec, who) {
   el.className = "laneinfo";
   el.textContent = "";
-  const b = document.createElement("b"); b.textContent = (who ? who + " — " : "") + spec.line1;
+  const b = document.createElement("b");
+  b.textContent = (who ? who + " — " : "") + spec.line1
+    + (el.dataset.strategyName ? " · 作戦 " + el.dataset.strategyName : "");
   el.appendChild(b);
   if (spec.power) {
     el.appendChild(document.createTextNode("\n"));
@@ -4738,6 +4749,7 @@ async function updateLaneInfo(L) {
       : (PRESETS[L.sel.value] ? Object.assign({}, DEFAULT, PRESETS[L.sel.value].cfg) : null);
     if (!c) { laneNote(el, ""); return; }
     const spec = engineSpec(c);
+    el.dataset.strategyName = "";
     el.dataset.key = encodeCfg(c);
     el.dataset.who = laneLabel(L.name);
     renderLaneInfo(el, spec, el.dataset.who);
@@ -4751,7 +4763,9 @@ async function updateLaneInfo(L) {
     const r = await lookupNumber(d);
     if (String(L.input.value || "").trim() !== raw) return;
     if (!r.cfg) { laneNote(el, r.err, true); return; }
+    if (!L.strategyTouched) L.strategy.value = cleanNumberStrategy(r.strategy);
     const spec = engineSpec(r.cfg);
+    el.dataset.strategyName = numberStrategyName(r.strategy);
     el.dataset.key = encodeCfg(r.cfg);
     el.dataset.who = laneLabel(L.name);
     renderLaneInfo(el, spec, el.dataset.who);
@@ -4762,6 +4776,7 @@ async function updateLaneInfo(L) {
     const c = decodeCfg(raw);
     if (!c) { laneNote(el, "このコードは読み取れません。", true); return; }
     const spec = engineSpec(c);
+    el.dataset.strategyName = "";
     el.dataset.key = encodeCfg(c);
     el.dataset.who = laneLabel(L.name);
     renderLaneInfo(el, spec, el.dataset.who);
@@ -4779,7 +4794,8 @@ function laneChanged(i, wait) {
 /* ---- build however many lanes were asked for, keeping what was typed ---- */
 function buildLanes(n) {
   n = clamp(Math.round(n) || 2, 2, MAX_RACE_ENTRIES);
-  const prev = lanes.map(L => ({ sel: L.sel.value, val: L.input.value, nm: L.name.value, strat: L.strategy.value }));
+  const prev = lanes.map(L => ({ sel: L.sel.value, val: L.input.value, nm: L.name.value,
+    strat: L.strategy.value, touched: L.strategyTouched }));
   lanesBox.innerHTML = "";
   lanes = [];
   for (let i = 0; i < n; i++) {
@@ -4810,7 +4826,8 @@ function buildLanes(n) {
     info.className = "laneinfo"; info.setAttribute("role", "status");
     d.append(row, nameInp, sel, strategySel, inp, info);
     lanesBox.appendChild(d);
-    lanes.push({ sel, input: inp, name: nameInp, strategy: strategySel, info, i });
+    lanes.push({ sel, input: inp, name: nameInp, strategy: strategySel, info, i,
+      strategyTouched: prev[i] ? !!prev[i].touched : false });
     sel.value = prev[i] ? prev[i].sel : (i === 0 ? "__cur" : "__code");
     inp.value = prev[i] ? prev[i].val : "";
     nameInp.value = prev[i] ? prev[i].nm : "";
@@ -4831,10 +4848,12 @@ function buildLanes(n) {
       if (sel.value !== "__code") inp.value = "";
       laneChanged(i, 0);
     });
+    strategySel.addEventListener("change", () => { if (lanes[i]) lanes[i].strategyTouched = true; });
     inp.addEventListener("input", () => {
       const has = String(inp.value || "").trim().length > 0;
       if (has && sel.value !== "__code") { sel.dataset.prev = sel.value; sel.value = "__code"; }
       else if (!has && sel.value === "__code") sel.value = sel.dataset.prev || "__cur";
+      if (lanes[i]) lanes[i].strategyTouched = false;
       laneChanged(i, 450);
     });
   }
@@ -4858,6 +4877,7 @@ async function startRace() {
   for (const L of lanes) {
     const r = await resolveLane(L.sel, L.input, laneName(L.i), L.name);
     if (r.err) { btnRace.disabled = false; btnRace.textContent = "レース開始"; sayRace(r.err, "bad"); return; }
+    if (r.numberStrategy && !L.strategyTouched) L.strategy.value = r.numberStrategy;
     r.strategyChoice = L.strategy.value;
     r.strategy = raceStrategy(r.strategyChoice, r.cfg, comeback);
     entries.push(r);
@@ -5493,7 +5513,7 @@ async function loadPublicGarage() {
     .filter(r => garageEntry(r))
     .map(r => Object.assign({}, r, { pub: true }));
   const nums = takeNumbers(data && data.numbers);
-  if (nums) numState.textContent = "9で始まる番号は全端末対応 · 旧公開番号 " + nums + " 件";
+  if (nums) numState.textContent = "4〜9で始まる番号は全端末対応 · 公開番号 " + nums + " 件";
   if (publicRows.length || nums) {
     garageState.textContent = "公開ボード（" + publicRows.length + "台"
       + (nums ? " / 番号" + nums + "件" : "") + "） + このパソコン内";
