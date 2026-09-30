@@ -5242,6 +5242,51 @@ function raceSample(run, tt) {
     boost: T.boost ? T.boost[i] : 0, energy: T.energy ? T.energy[i] : 0 };
 }
 
+/* A live leaderboard stays in the same upper-left position on every course.
+   Large fields use two short columns so all thirteen entries still fit on a
+   phone without turning the race canvas into a wall of text. */
+function drawLiveStandings(g, w, tt, at, order) {
+  const n = order.length;
+  if (!n) return;
+  const cols = n > 7 && w >= 270 ? 2 : 1;
+  const rows = Math.ceil(n / cols);
+  const outer = 6, colW = Math.min(cols === 2 ? 154 : 190, Math.floor((w - outer * 2) / cols));
+  const headH = 18, rowH = n > 8 ? 13 : 14;
+  const panelW = colW * cols, panelH = headH + rows * rowH + 4;
+  const x0 = outer, y0 = outer;
+  g.save();
+  g.globalAlpha = .94;
+  g.fillStyle = "#090D11"; g.fillRect(x0, y0, panelW, panelH);
+  g.globalAlpha = 1;
+  g.strokeStyle = "#303A44"; g.lineWidth = 1;
+  g.strokeRect(x0 + .5, y0 + .5, panelW - 1, panelH - 1);
+  g.fillStyle = "#151B21"; g.fillRect(x0 + 1, y0 + 1, panelW - 2, headH - 1);
+  g.textBaseline = "middle"; g.textAlign = "left";
+  g.font = "600 9px 'IBM Plex Mono',monospace"; g.fillStyle = "#C8D2DD";
+  g.fillText("現在順位", x0 + 7, y0 + headH / 2 + .5);
+  g.textAlign = "right"; g.fillStyle = "#6E7A88";
+  g.fillText("T+" + Math.min(tt, race.dur).toFixed(1) + "s", x0 + panelW - 7, y0 + headH / 2 + .5);
+  for (let q = 0; q < n; q++) {
+    const colNo = Math.floor(q / rows), rowNo = q % rows;
+    const x = x0 + colNo * colW, y = y0 + headH + rowNo * rowH;
+    const k = order[q].k, s = at[k], col = LANE_COL[k % LANE_COL.length];
+    if (q === 0) { g.fillStyle = "rgba(255,106,19,.09)"; g.fillRect(x + 1, y, colW - 2, rowH); }
+    else if (rowNo % 2) { g.fillStyle = "rgba(255,255,255,.018)"; g.fillRect(x + 1, y, colW - 2, rowH); }
+    g.textAlign = "left"; g.font = "600 9px 'IBM Plex Mono',monospace"; g.fillStyle = col;
+    g.fillText(String(q + 1) + "位", x + 6, y + rowH / 2);
+    const raw = String(race.names[k] || laneName(k));
+    const nameX = x + 29, speedW = 43, maxNameW = Math.max(22, colW - 29 - speedW);
+    g.font = "500 9px 'IBM Plex Sans JP',sans-serif";
+    let lab = raw;
+    while (lab.length > 1 && g.measureText(lab).width > maxNameW) lab = lab.slice(0, -1);
+    if (lab !== raw) lab = lab.slice(0, Math.max(1, lab.length - 1)) + "…";
+    g.fillStyle = "#D4DCE5"; g.fillText(lab, nameX, y + rowH / 2);
+    g.textAlign = "right"; g.font = "600 9px 'IBM Plex Mono',monospace"; g.fillStyle = col;
+    g.fillText((s.boost ? "⚡" : "") + Math.round(s.v), x + colW - 6, y + rowH / 2);
+  }
+  g.restore();
+}
+
 /* ---- a curved course is drawn as the track itself, cars running on it ---- */
 function drawRaceMap(g, w, h, tt) {
   const cs = race.cs, sh = cs.shape, n = race.runs.length;
@@ -5311,7 +5356,7 @@ function drawRaceMap(g, w, h, tt) {
     const s = raceSample(race.runs[k], tt);
     at.push(s ? s : { v: 0, rpm: 0, gear: 1, dist: 0, spin: 0 });
   }
-  const order = at.map((s, k) => ({ k, d: s.dist })).sort((a, b) => b.d - a.d);
+  const order = at.map((s, k) => ({ k, d: s.dist })).sort((a, b) => b.d - a.d || a.k - b.k);
 
   /* the cars */
   const nameplates = [];
@@ -5465,6 +5510,7 @@ function drawRaceMap(g, w, h, tt) {
       g.fillText((s.boost ? "⚡" : "") + Math.round(s.v) + " km/h", x + colW - 6, y + rowH / 2);
     }
     g.textBaseline = "alphabetic"; g.textAlign = "left";
+    drawLiveStandings(g, w, tt, at, order);
     return;
   }
 
@@ -5494,6 +5540,7 @@ function drawRaceMap(g, w, h, tt) {
     const gap = q === 0 ? "km/h" : "-" + Math.round(order[0].d - order[q].d) + " m";
     g.fillText(gap, lx0 + 46, y + 12);
   }
+  drawLiveStandings(g, w, tt, at, order);
 }
 
 function drawRace() {
@@ -5514,6 +5561,8 @@ function drawRace() {
   /* a course with corners is worth drawing as a course; a drag strip is not */
   if (race.cs && race.cs.curved) { drawRaceMap(g, w, h, tt); return; }
 
+  const at = race.runs.map(r => raceSample(r, tt) || { v: 0, rpm: 0, gear: 1, dist: 0, spin: 0 });
+  const order = at.map((s, k) => ({ k, d: s.dist })).sort((a, b) => b.d - a.d || a.k - b.k);
   const padL = 54, padR = 16, top = 15;
   const trackW = w - padL - padR;
   const gap = n >= 9 ? 3 : n > 4 ? 5 : 8;
@@ -5522,7 +5571,7 @@ function drawRace() {
   const X = d => padL + Math.min(1, d / race.target) * trackW;
 
   for (let k = 0; k < n; k++) {
-    const s = raceSample(race.runs[k], tt);
+    const s = at[k];
     if (!s) continue;
     const col = LANE_COL[k % LANE_COL.length];
     const y = top + k * (laneH + gap);
@@ -5627,6 +5676,7 @@ function drawRace() {
     g.fillStyle = "#4C5866"; g.font = "500 9px 'IBM Plex Mono',monospace"; g.textAlign = "left";
     g.fillText("km/h", padL, cy0 - 5);
   }
+  drawLiveStandings(g, w, tt, at, order);
 }
 
 const btnRaceLink = document.getElementById("btnRaceLink");
