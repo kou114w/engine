@@ -2540,8 +2540,10 @@ function engineBoostCombo(c) {
 /* ============================================================
    Courses
 
-   A course is a list of [length m, radius m] segments; radius 0 is a straight
-   and the sign is the direction of turn. Everything the race needs — the
+   A course is a list of [length m, radius m, grip, rolling resistance] segments;
+   radius 0 is a straight and the sign is the direction of turn. Grip and
+   rolling resistance default to 1, so ordinary paved courses stay concise.
+   Everything the race needs — the
    curvature at each metre, the speed a car may carry there, and the shape to
    draw — is derived from that one list.
    ============================================================ */
@@ -2570,17 +2572,41 @@ const COURSES = {
               seg: [[220, 0], [120, -90], [80, 0], [70, 32], [150, 0], [180, 210],
                     [110, 0], [64, -26], [60, 0], [145, -120], [180, 0], [78, 38],
                     [95, 0], [200, 180], [90, 0], [72, -30], [160, 0], [120, -95],
-                    [260, 0]] }
+                    [260, 0]] },
+  rallyFast: { name: "ラリー・高速グラベル 2.1 km",
+               seg: [[200, 0, .80, 1.65], [180, -160, .78, 1.70], [120, 0, .80, 1.65],
+                     [140, 120, .78, 1.70], [160, 0, .80, 1.65], [110, -70, .76, 1.75],
+                     [150, 0, .80, 1.65], [170, 210, .79, 1.68], [130, 0, .80, 1.65],
+                     [100, -55, .75, 1.80], [210, 0, .80, 1.65], [150, 130, .78, 1.70],
+                     [280, 0, .80, 1.65]] },
+  rallyForest: { name: "ラリー・林道テクニカル 1.4 km",
+                 seg: [[90, 0, .73, 1.90], [75, -32, .68, 2.05], [45, 0, .72, 1.95],
+                       [82, 38, .69, 2.05], [60, 0, .72, 1.95], [68, -26, .66, 2.12],
+                       [50, 0, .71, 1.98], [95, 45, .69, 2.05], [70, 0, .72, 1.95],
+                       [72, -30, .67, 2.10], [55, 0, .71, 1.98], [88, 34, .68, 2.08],
+                       [75, 0, .72, 1.95], [105, -52, .70, 2.02], [130, 0, .73, 1.90],
+                       [74, 27, .67, 2.10], [180, 0, .73, 1.90]] },
+  rallyMixed: { name: "ラリー・ミックス 2.7 km（舗装＋グラベル）",
+                seg: [[220, 0, 1, 1], [120, -100, 1, 1], [100, 0, .78, 1.70],
+                      [80, 50, .73, 1.90], [170, 0, .76, 1.78], [100, -80, .75, 1.82],
+                      [120, 0, 1, 1], [70, 40, .96, 1.05], [130, 0, 1, 1],
+                      [160, 220, .79, 1.65], [160, 0, .78, 1.70], [80, -45, .68, 2.05],
+                      [100, 0, .75, 1.82], [140, 120, .77, 1.74], [210, 0, 1, 1],
+                      [90, -60, 1, 1], [180, 0, .80, 1.65], [140, 180, .78, 1.70],
+                      [330, 0, 1, 1]] }
 };
 
 /* curvature sampled every metre, smoothed so a corner has an entry and an exit
    instead of a step the car would have to take instantly */
 function buildCourse(course) {
-  const ds = 1, raw = [];
-  for (const [len, R] of course.seg) {
+  const ds = 1, raw = [], rawGrip = [], rawRoll = [];
+  for (const seg of course.seg) {
+    const len = seg[0], R = seg[1];
+    const roadGrip = seg.length > 2 ? clamp(+seg[2], .45, 1.15) : 1;
+    const roadRoll = seg.length > 3 ? clamp(+seg[3], .8, 2.5) : 1;
     const n = Math.max(1, Math.round(len / ds));
     const k = R ? 1 / R : 0;
-    for (let i = 0; i < n; i++) raw.push(k);
+    for (let i = 0; i < n; i++) { raw.push(k); rawGrip.push(roadGrip); rawRoll.push(roadRoll); }
   }
   const win = 9, half = (win - 1) / 2, kappa = new Float64Array(raw.length);
   for (let i = 0; i < raw.length; i++) {
@@ -2592,9 +2618,23 @@ function buildCourse(course) {
     }
     kappa[i] = sum / cnt;
   }
+  /* Surface changes are blended over seventeen metres. A wheel does not move
+     from asphalt to loose gravel in one physics sample, and this avoids an
+     artificial step in both braking and wheelspin. */
+  const surfHalf = 8, grip = new Float32Array(raw.length), roll = new Float32Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    let gs = 0, rs = 0, cnt = 0;
+    for (let j = -surfHalf; j <= surfHalf; j++) {
+      const q = i + j;
+      if (q < 0 || q >= raw.length) continue;
+      gs += rawGrip[q]; rs += rawRoll[q]; cnt++;
+    }
+    grip[i] = gs / cnt; roll[i] = rs / cnt;
+  }
   let curved = false;
   for (let i = 0; i < kappa.length; i++) if (Math.abs(kappa[i]) > 1e-5) { curved = true; break; }
-  return { kappa, ds, total: raw.length * ds, curved, name: course.name };
+  return { kappa, grip, roll, surface: Float32Array.from(rawGrip), ds,
+    total: raw.length * ds, curved, loose: rawGrip.some(v => v < .98), name: course.name };
 }
 
 /* The speed a car may still be doing at each metre: the corner sets a ceiling,
@@ -2604,13 +2644,14 @@ function buildCourse(course) {
 function courseLimits(cs, veh) {
   const n = cs.kappa.length, g0 = 9.80665;
   const lim = new Float64Array(n);
-  const muLat = veh.grip * 0.96;
-  const aBrake = veh.grip * g0 * 0.92;
   for (let i = 0; i < n; i++) {
     const k = Math.abs(cs.kappa[i]);
+    const muLat = veh.grip * (cs.grip ? cs.grip[i] : 1) * 0.96;
     lim[i] = k > 1e-5 ? Math.sqrt(muLat * g0 / k) : 200;
   }
   for (let i = n - 2; i >= 0; i--) {
+    const roadGrip = cs.grip ? Math.min(cs.grip[i], cs.grip[i + 1]) : 1;
+    const aBrake = veh.grip * roadGrip * g0 * 0.92;
     const cap = Math.sqrt(lim[i + 1] * lim[i + 1] + 2 * aBrake * cs.ds);
     if (cap < lim[i]) lim[i] = cap;
   }
@@ -2720,15 +2761,19 @@ function raceRun(cfg, veh, opts) {
       engage = 0; matching = false;
     }
     const ratio = ratioOf(gear);
-    const Fdrag = 0.5 * rho * veh.cda * v * v;
-    const Froll = v > 0.2 ? veh.crr * veh.mass * g0 : 0;
-    const Fmax = veh.grip * veh.mass * g0 * (veh.drive + Math.min(0.15, v * 0.004));
-    const Fgrip = veh.grip * veh.mass * g0;              // all four tyres, for cornering
-
-    /* where on the course, and how hard it is turning there */
+    /* where on the course, and what surface is under the tyres */
     let idx = (dist / cs.ds) | 0;
     if (idx < 0) idx = 0;
     if (idx >= lim.length) idx = lim.length - 1;
+    const roadGrip = cs.grip ? cs.grip[idx] : 1;
+    const roadRoll = cs.roll ? cs.roll[idx] : 1;
+    const Fdrag = 0.5 * rho * veh.cda * v * v;
+    const Froll = v > 0.2 ? veh.crr * roadRoll * veh.mass * g0 : 0;
+    const Fmax = veh.grip * roadGrip * veh.mass * g0
+      * (veh.drive + Math.min(0.15, v * 0.004));
+    const Fgrip = veh.grip * roadGrip * veh.mass * g0;   // all four tyres, for cornering
+
+    /* how hard the course is turning here */
     const kap = Math.abs(cs.kappa[idx]);
     const progress = dist / Math.max(1, target);
     const Flat = veh.mass * v * v * kap;
@@ -5127,6 +5172,24 @@ function drawRaceMap(g, w, h, tt) {
   };
   trace(); g.strokeStyle = "#2A333D"; g.lineWidth = tw + 3; g.stroke();
   trace(); g.strokeStyle = "#161B21"; g.lineWidth = tw; g.stroke();
+  /* Loose surfaces are visible as earth-coloured sections. Draw contiguous
+     runs in a handful of strokes rather than painting every metre each frame. */
+  if (cs.surface) {
+    let a = 0;
+    while (a < cs.surface.length) {
+      let b = a + 1;
+      while (b < cs.surface.length && Math.abs(cs.surface[b] - cs.surface[a]) < .005) b++;
+      const sg = cs.surface[a];
+      if (sg < .98) {
+        g.beginPath(); g.moveTo(X(a), Y(a));
+        for (let i = a + 2; i < b; i += 2) g.lineTo(X(i), Y(i));
+        const end = Math.min(last, b); g.lineTo(X(end), Y(end));
+        g.strokeStyle = sg < .71 ? "#6A4D38" : sg < .77 ? "#765A3E" : "#6C604D";
+        g.lineWidth = Math.max(4, tw - 2); g.stroke();
+      }
+      a = b;
+    }
+  }
   g.save();
   g.setLineDash([5, 9]);
   trace(); g.strokeStyle = "#333D48"; g.lineWidth = 1; g.stroke();
