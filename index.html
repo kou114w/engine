@@ -232,12 +232,12 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .laneinfo .combo{color:var(--spark)}
 .laneinfo.bad{color:var(--danger)}
 @media (max-width:640px){.racegrid{grid-template-columns:1fr}}
-#race{aspect-ratio:16/9;width:100%;display:block}
-#race.mid{aspect-ratio:16/10}
-#race.many{aspect-ratio:16/13}
+#race{aspect-ratio:16/11;width:100%;display:block}
+#race.mid{aspect-ratio:4/3}
+#race.many{aspect-ratio:1/1}
 #racePanel[hidden]{display:none}
-@media (max-width:760px){#race,#race.mid{aspect-ratio:4/3}}
-@media (max-width:620px){#race.many{aspect-ratio:4/5!important}}
+@media (max-width:760px){#race,#race.mid{aspect-ratio:1/1}}
+@media (max-width:620px){#race.many{aspect-ratio:2/3!important}}
 .resultgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule-soft);border-top:1px solid var(--rule-soft)}
 @media (max-width:520px){.resultgrid{grid-template-columns:1fr}}
 .rescard{background:var(--panel);padding:11px 13px}
@@ -5245,14 +5245,18 @@ function raceSample(run, tt) {
 /* A live leaderboard stays in the same upper-left position on every course.
    Large fields use two short columns so all thirteen entries still fit on a
    phone without turning the race canvas into a wall of text. */
-function drawLiveStandings(g, w, tt, at, order) {
-  const n = order.length;
-  if (!n) return;
+function liveStandingsLayout(w, n) {
   const cols = n > 7 && w >= 270 ? 2 : 1;
   const rows = Math.ceil(n / cols);
   const outer = 6, colW = Math.min(cols === 2 ? 154 : 190, Math.floor((w - outer * 2) / cols));
   const headH = 18, rowH = n > 8 ? 13 : 14;
-  const panelW = colW * cols, panelH = headH + rows * rowH + 4;
+  return { cols, rows, outer, colW, headH, rowH,
+    panelW: colW * cols, panelH: headH + rows * rowH + 4 };
+}
+function drawLiveStandings(g, w, tt, at, order) {
+  const n = order.length;
+  if (!n) return;
+  const { cols, rows, outer, colW, headH, rowH, panelW, panelH } = liveStandingsLayout(w, n);
   const x0 = outer, y0 = outer;
   g.save();
   g.globalAlpha = .94;
@@ -5301,11 +5305,19 @@ function drawRaceMap(g, w, h, tt) {
   const mapH = compact ? h - listH : h;
   const listW = compact ? 0 : Math.min(190, Math.max(126, w * 0.26));
   const mapW = w - listW;
+  /* The live order owns a band at the top. Course markers and nameplates are
+     fitted only below it, so neither a start-line pack nor a later overtake
+     can put a triangle underneath the leaderboard. */
+  const rankBox = liveStandingsLayout(w, n);
+  /* Extra clearance also covers the five visual lane offsets used when a pack
+     is together; even the outermost arrow cannot cross back into the panel. */
+  const mapTop = rankBox.outer + rankBox.panelH + 24;
+  const mapAreaH = Math.max(80, mapH - mapTop);
   const pad = 12;
   const spanX = Math.max(1, sh.maxx - sh.minx), spanY = Math.max(1, sh.maxy - sh.miny);
-  const sc = Math.min((mapW - pad * 2) / spanX, (mapH - pad * 2) / spanY);
+  const sc = Math.min((mapW - pad * 2) / spanX, (mapAreaH - pad * 2) / spanY);
   const ox = pad + (mapW - pad * 2 - spanX * sc) / 2 - sh.minx * sc;
-  const oy = pad + (mapH - pad * 2 - spanY * sc) / 2 - sh.miny * sc;
+  const oy = mapTop + pad + (mapAreaH - pad * 2 - spanY * sc) / 2 - sh.miny * sc;
   const X = i => ox + sh.px[i] * sc, Y = i => oy + sh.py[i] * sc;
   const last = sh.px.length - 1;
 
@@ -5439,7 +5451,7 @@ function drawRaceMap(g, w, h, tt) {
       for (let ci = 0; ci < candidates.length; ci++) {
         const d = candidates[ci];
         const lx0 = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + d[0]));
-        const ly0 = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + d[1]));
+        const ly0 = Math.max(mapTop + ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + d[1]));
         const box0 = { x: lx0 - pw / 2, y: ly0 - ph / 2, w: pw, h: ph };
         let overlap = 0;
         for (const b of placed) {
@@ -5456,7 +5468,7 @@ function drawRaceMap(g, w, h, tt) {
     /* Never choose another side later. The car and plate travel together in
        screen space, so a pass or a temporary overlap cannot start an oscillation. */
     const lx = Math.max(pw / 2 + 3, Math.min(mapW - pw / 2 - 3, p.cx + state.homeDx));
-    const ly = Math.max(ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + state.homeDy));
+    const ly = Math.max(mapTop + ph / 2 + 3, Math.min(mapH - ph / 2 - 3, p.cy + state.homeDy));
     const box = { x: lx - pw / 2, y: ly - ph / 2, w: pw, h: ph };
     placed.push(box);
     g.strokeStyle = p.col; g.globalAlpha = .42; g.lineWidth = 1;
@@ -5563,10 +5575,13 @@ function drawRace() {
 
   const at = race.runs.map(r => raceSample(r, tt) || { v: 0, rpm: 0, gear: 1, dist: 0, spin: 0 });
   const order = at.map((s, k) => ({ k, d: s.dist })).sort((a, b) => b.d - a.d || a.k - b.k);
-  const padL = 54, padR = 16, top = 15;
+  const rankBox = liveStandingsLayout(w, n);
+  const padL = 54, padR = 16, top = rankBox.outer + rankBox.panelH + 8;
   const trackW = w - padL - padR;
   const gap = n >= 9 ? 3 : n > 4 ? 5 : 8;
-  const bandH = n >= 9 ? Math.max(80, h - 64) : Math.max(40, h * (n > 3 ? 0.62 : 0.5));
+  const bandH = n >= 9
+    ? Math.max(80, h - top - 42)
+    : Math.max(40, Math.min(h - top - 56, h * (n > 3 ? 0.62 : 0.5)));
   const laneH = Math.max(11, Math.min(34, (bandH - gap * (n - 1)) / n));
   const X = d => padL + Math.min(1, d / race.target) * trackW;
 
