@@ -488,7 +488,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
               <select id="courseSel" aria-label="コース"></select></label>
             <label class="ctl"><div class="row"><span class="lab">レースルール<small>Rule</small></span></div>
               <select id="raceRule" aria-label="レースルール">
-                <option value="comeback" selected>逆転バトル（BOOST）</option>
+                <option value="comeback" selected>レースバトル</option>
                 <option value="real">リアル（補助なし）</option>
               </select></label>
           </div>
@@ -4894,7 +4894,7 @@ async function startRace() {
   };
   btnRace.disabled = false; btnRace.textContent = "レース開始";
   btnRaceReplay.disabled = false;
-  raceInfo.firstChild.textContent = comeback ? "走行中 · BOOST" : "走行中";
+  raceInfo.firstChild.textContent = comeback ? "走行中 · レースバトル" : "走行中";
   sayRace(comeback
     ? "ブレーキで充電し、終盤の直線でBOOSTを自動使用します。結果は最後に出ます。"
     : "結果は走り終わってから出ます。", "");
@@ -4905,7 +4905,7 @@ async function playRace() {
   if (!race) return;
   if (race.src) { try { race.src.stop(); } catch (e) { /* already done */ } race.src = null; }
   race.revealed = false; raceResult.hidden = true;
-  raceInfo.firstChild.textContent = race.comeback ? "走行中 · BOOST" : "走行中";
+  raceInfo.firstChild.textContent = race.comeback ? "走行中 · レースバトル" : "走行中";
   clearTimeout(race.revealTimer);
   /* the verdict must not depend on anything being drawn: a collapsed panel or a
      background tab stops the animation loop, and the race still finished */
