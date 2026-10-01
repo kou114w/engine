@@ -232,12 +232,13 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .laneinfo .combo{color:var(--spark)}
 .laneinfo.bad{color:var(--danger)}
 @media (max-width:640px){.racegrid{grid-template-columns:1fr}}
-#race{aspect-ratio:16/11;width:100%;display:block}
-#race.mid{aspect-ratio:4/3}
-#race.many{aspect-ratio:1/1}
+#race{aspect-ratio:4/3;width:100%;display:block}
+#race.mid{aspect-ratio:8/7}
+#race.many{aspect-ratio:5/6}
 #racePanel[hidden]{display:none}
-@media (max-width:760px){#race,#race.mid{aspect-ratio:1/1}}
-@media (max-width:620px){#race.many{aspect-ratio:2/3!important}}
+#racePanel > .pbody{padding-bottom:0}
+@media (max-width:760px){#race,#race.mid{aspect-ratio:4/5}}
+@media (max-width:620px){#race.many{aspect-ratio:3/5!important}}
 .resultgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule-soft);border-top:1px solid var(--rule-soft)}
 @media (max-width:520px){.resultgrid{grid-template-columns:1fr}}
 .rescard{background:var(--panel);padding:11px 13px}
