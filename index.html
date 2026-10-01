@@ -5321,7 +5321,7 @@ function drawRaceMap(g, w, h, tt) {
   const spanX = Math.max(1, sh.maxx - sh.minx), spanY = Math.max(1, sh.maxy - sh.miny);
   /* Keep the compact canvas, but zoom the route itself around its centre so
      bends and car movement remain easy to read. */
-  const sc = 1.15 * Math.min((mapW - pad * 2) / spanX, (mapAreaH - pad * 2) / spanY);
+  const sc = 1.08 * Math.min((mapW - pad * 2) / spanX, (mapAreaH - pad * 2) / spanY);
   const ox = pad + (mapW - pad * 2 - spanX * sc) / 2 - sh.minx * sc;
   const oy = mapTop + pad + (mapAreaH - pad * 2 - spanY * sc) / 2 - sh.miny * sc;
   const X = i => ox + sh.px[i] * sc, Y = i => oy + sh.py[i] * sc;
@@ -5408,7 +5408,7 @@ function drawRaceMap(g, w, h, tt) {
     const laneStep = n <= 4 ? r * 1.35 : r * .62;
     const rawCx = X(i) - Math.sin(ang) * slot * laneStep;
     const rawCy = Y(i) + Math.cos(ang) * slot * laneStep;
-    /* A 15% map zoom can place the first or last track point on the canvas
+    /* An enlarged map can place the first or last track point on the canvas
        edge. Keep the complete arrow, glow and its name connector inside the
        drawable area, especially for a thirteen-car starting pack on phones. */
     const markerPad = Math.max(22, r * 2.4);
