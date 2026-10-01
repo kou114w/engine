@@ -5248,16 +5248,17 @@ function raceSample(run, tt) {
 function liveStandingsLayout(w, n) {
   const cols = n > 7 && w >= 270 ? 2 : 1;
   const rows = Math.ceil(n / cols);
-  const outer = 6, colW = Math.min(cols === 2 ? 154 : 190, Math.floor((w - outer * 2) / cols));
+  const outer = 6, top = 0;
+  const colW = Math.min(cols === 2 ? 154 : 190, Math.floor((w - outer * 2) / cols));
   const headH = 20, rowH = n > 8 ? 15 : 16;
-  return { cols, rows, outer, colW, headH, rowH,
+  return { cols, rows, outer, top, colW, headH, rowH,
     panelW: colW * cols, panelH: headH + rows * rowH + 4 };
 }
 function drawLiveStandings(g, w, tt, at, order) {
   const n = order.length;
   if (!n) return;
-  const { cols, rows, outer, colW, headH, rowH, panelW, panelH } = liveStandingsLayout(w, n);
-  const x0 = outer, y0 = outer;
+  const { cols, rows, outer, top, colW, headH, rowH, panelW, panelH } = liveStandingsLayout(w, n);
+  const x0 = outer, y0 = top;
   g.save();
   g.globalAlpha = .94;
   g.fillStyle = "#090D11"; g.fillRect(x0, y0, panelW, panelH);
@@ -5304,7 +5305,7 @@ function drawRaceMap(g, w, h, tt) {
   const rankBox = liveStandingsLayout(w, n);
   /* Extra clearance also covers the five visual lane offsets used when a pack
      is together; even the outermost arrow cannot cross back into the panel. */
-  const mapTop = rankBox.outer + rankBox.panelH + 24;
+  const mapTop = rankBox.top + rankBox.panelH + 24;
   const mapAreaH = Math.max(80, mapH - mapTop);
   const pad = 12;
   const spanX = Math.max(1, sh.maxx - sh.minx), spanY = Math.max(1, sh.maxy - sh.miny);
@@ -5503,7 +5504,7 @@ function drawRace() {
   const at = race.runs.map(r => raceSample(r, tt) || { v: 0, rpm: 0, gear: 1, dist: 0, spin: 0 });
   const order = at.map((s, k) => ({ k, d: s.dist })).sort((a, b) => b.d - a.d || a.k - b.k);
   const rankBox = liveStandingsLayout(w, n);
-  const padL = 54, padR = 16, top = rankBox.outer + rankBox.panelH + 8;
+  const padL = 54, padR = 16, top = rankBox.top + rankBox.panelH + 8;
   const trackW = w - padL - padR;
   const gap = n >= 9 ? 3 : n > 4 ? 5 : 8;
   const bandH = n >= 9
