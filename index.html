@@ -5406,8 +5406,14 @@ function drawRaceMap(g, w, h, tt) {
        offset separates their arrows without changing any race physics. */
     const slots = Math.min(n, 5), slot = (k % slots) - (slots - 1) / 2;
     const laneStep = n <= 4 ? r * 1.35 : r * .62;
-    const cx = X(i) - Math.sin(ang) * slot * laneStep;
-    const cy = Y(i) + Math.cos(ang) * slot * laneStep;
+    const rawCx = X(i) - Math.sin(ang) * slot * laneStep;
+    const rawCy = Y(i) + Math.cos(ang) * slot * laneStep;
+    /* A 15% map zoom can place the first or last track point on the canvas
+       edge. Keep the complete arrow, glow and its name connector inside the
+       drawable area, especially for a thirteen-car starting pack on phones. */
+    const markerPad = Math.max(22, r * 2.4);
+    const cx = clamp(rawCx, markerPad, mapW - markerPad);
+    const cy = clamp(rawCy, mapTop + markerPad, mapH - markerPad);
     if (s.boost) {
       g.fillStyle = "rgba(255,194,75,.20)";
       g.beginPath(); g.arc(cx, cy, r * 2.2, 0, 7); g.fill();
