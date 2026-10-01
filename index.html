@@ -250,6 +250,7 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .combotag{display:inline-block;margin-left:7px;color:var(--spark);font:600 9px var(--mono);letter-spacing:.05em}
 .strategytag{display:inline-block;margin-left:7px;color:var(--bankb);font:600 9px var(--mono);letter-spacing:.08em}
 .handlingtag{display:inline-block;margin-left:7px;color:#E5A83B;font:600 9px var(--mono);letter-spacing:.05em}
+.cornerbonustag{display:inline-block;margin-left:7px;color:var(--ok);font:600 9px var(--mono);letter-spacing:.05em}
 .rescard .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .rescard .nums div span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:#5D6875;text-transform:uppercase}
 .rescard .nums div b{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em}
@@ -511,7 +512,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
             <button class="btn-ghost" id="btnRaceReplay" disabled>もう一度再生</button>
             <button class="btn-ghost" id="btnRaceLink" hidden>対戦リンクをコピー</button>
           </div>
-          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。圧縮比・燃焼室・吸排気・カム・空燃比・点火時期などの相性が良いエンジンは、セッティングBOOSTも強くなります。直線性能が高いエンジンほどコーナーで旋回・制動・立ち上がりの負担が増え、グリップは舗装で最大30%、未舗装で最大55%低下します。</p>
+          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。圧縮比・燃焼室・吸排気・カム・空燃比・点火時期などの相性が良いエンジンは、セッティングBOOSTも強くなります。2000cc以下はカーブ速度が35%向上し、5000ccに向けて補正がなめらかに減ります。直線性能が高いエンジンほどコーナーで旋回・制動・立ち上がりの負担が増え、グリップは舗装で最大30%、未舗装で最大55%低下します。</p>
           <p class="sharemsg" id="raceMsg"></p>
 
           <div class="garage" id="garageBox">
@@ -541,7 +542,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
           <p><b>2 · クランク動力学</b> — 筒内圧 × dV/dθ を全気筒で合計した図示トルクから、摩擦と負荷を引いて慣性モーメントで回転を進めます。回転数は入力ではなく<b>結果</b>です。</p>
           <p><b>3 · 排気管の音響</b> — 排気弁から出た圧力パルスをデジタル導波路（進行波・後退波の遅延線）に注入し、集合部の散乱接合と管端反射を解いています。管長を変えると脈動が変わり、音色と充填効率の両方が動きます。</p>
           <p><b>4 · 使い方</b> — 「エンジン始動」でセルが回ります。スロットルバーを押さえて（PC では <kbd>Space</kbd> でも）吹かせます。「ダイナモ計測」は同じ物理モデルを高速で回してトルク・出力曲線を出します。</p>
-          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。直線で速いエンジンほど車体への負担が増えるため、カーブでは旋回・制動・立ち上がりのグリップが下がります。低下量は舗装で最大30%、グラベルや林道で最大55%です。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。8項目の組み合わせから「高回転NA・トルクチューン・軽量レスポンス・多気筒ハーモニー」の相性を計算し、相性が良いほどBOOSTの充電と出力が上がります。「リアル」では作戦補助を完全に切れます。</p>
+          <p><b>5 · 対戦</b> — 組んだエンジンと相手のエンジンを同じ車に載せ、同じ路面で走らせます。ギア比・車重・空気抵抗・タイヤのスリップ率まで解いていて、トルクの出方や許容回転数がそのままタイムに出ます。2000cc以下のエンジンはカーブ速度が35%向上し、2000〜5000ccでは排気量に応じて補正がなめらかに減ります。直線で速いエンジンほど車体への負担が増えるため、カーブでは旋回・制動・立ち上がりのグリップが下がります。低下量は舗装で最大30%、グラベルや林道で最大55%です。「逃げ」は序盤から飛ばし、「差し」「追込」は出力とBOOSTを終盤まで温存します。8項目の組み合わせから「高回転NA・トルクチューン・軽量レスポンス・多気筒ハーモニー」の相性を計算し、相性が良いほどBOOSTの充電と出力が上がります。「リアル」では作戦補助を完全に切れます。</p>
           <p><b>6 · 共有</b> — 番号発行欄で作戦を選んで「番号を発行」を押すと、エンジンと作戦を別のスマホやPCでも読める8桁の合言葉にできます。受け取った番号は「8桁番号」パネルから読み込めます。</p>
           <p><b>7 · スマホでは</b> — パネル見出しをタップで開閉、下端の「負荷・保持」で負荷・Dyno hold・スロットル保持が出ます。スロットル保持を入れると指を離しても開度が残るので、片手で音の変化を追えます。音が出ないときは端末のマナーモードを確認してください。</p>
           <p style="margin-top:12px;color:#5D6875">着想元は AngeTheGreat の <a href="https://www.engine-sim.parts/" target="_blank" rel="noopener" style="color:#7C8896">engine-sim.parts</a>。あちらと同じく、これは音とレスポンスの再現を目的としたモデルで、エンジン設計の数値保証をするものではありません。</p>
@@ -2653,13 +2654,17 @@ function buildCourse(course) {
    then a backward pass walks it upstream at the braking limit so the driver has
    somewhere to brake from. This is the whole "driver" — everything else is the
    car deciding whether it can reach that speed. */
-function courseLimits(cs, veh, handlingGrip) {
+function courseLimits(cs, veh, handlingGrip, cornerSpeedBonus) {
   handlingGrip = clamp(handlingGrip == null ? 1 : handlingGrip, .40, 1);
+  cornerSpeedBonus = clamp(cornerSpeedBonus || 0, 0, .35);
+  /* Corner speed is proportional to sqrt(lateral grip). Squaring the requested
+     speed multiplier gives exactly that percentage at the speed ceiling. */
+  const cornerGripScale = Math.pow(1 + cornerSpeedBonus, 2);
   const n = cs.kappa.length, g0 = 9.80665;
   const lim = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const k = Math.abs(cs.kappa[i]);
-    const muLat = veh.grip * handlingGrip * (cs.grip ? cs.grip[i] : 1) * 0.96;
+    const muLat = veh.grip * handlingGrip * (cs.grip ? cs.grip[i] : 1) * 0.96 * cornerGripScale;
     lim[i] = k > 1e-5 ? Math.sqrt(muLat * g0 / k) : 200;
   }
   for (let i = n - 2; i >= 0; i--) {
@@ -2717,7 +2722,12 @@ function raceRun(cfg, veh, opts) {
   const speedBurden = clamp((paceIndex - 1.55) / 4.6, 0, 1);
   const handlingLoss = cs.curved ? speedBurden * (cs.loose ? .55 : .30) : 0;
   const handlingGrip = 1 - handlingLoss;
-  const lim = courseLimits(cs, veh, handlingGrip);
+  /* Engines up to 2.0 L receive the full 35% corner-speed advantage. It then
+     tapers continuously to zero at 5.0 L, avoiding a sudden class boundary.
+     Straights receive no bonus. */
+  const cornerSpeedBonus = cs.curved ? .35 * clamp((5 - dispL) / 3, 0, 1) : 0;
+  const cornerGripScale = Math.pow(1 + cornerSpeedBonus, 2);
+  const lim = courseLimits(cs, veh, handlingGrip, cornerSpeedBonus);
   const underdog = clamp((4.8 - paceIndex) / 4.3, 0, 1);
   const combo = engineBoostCombo(cfg), comboStrength = combo.strength;
   const boostPowerKw = (28 + 72 * underdog) * strategy.power * (1 + .25 * comboStrength);
@@ -2793,13 +2803,13 @@ function raceRun(cfg, veh, opts) {
     const Froll = v > 0.2 ? veh.crr * roadRoll * veh.mass * g0 : 0;
     const Fmax = veh.grip * tyreGrip * veh.mass * g0
       * (veh.drive + Math.min(0.15, v * 0.004));
-    const Fgrip = veh.grip * tyreGrip * veh.mass * g0;   // all four tyres, for cornering
+    const Fgrip = veh.grip * tyreGrip * veh.mass * g0;   // base braking / drive grip
 
     /* how hard the course is turning here */
     const kap = Math.abs(cs.kappa[idx]);
     const progress = dist / Math.max(1, target);
     const Flat = veh.mass * v * v * kap;
-    const latUse = Math.min(1, Flat / Fgrip);
+    const latUse = Math.min(1, Flat / (Fgrip * cornerGripScale));
     const circle = Math.sqrt(Math.max(0, 1 - latUse * latUse));
 
     /* the driver: lift and brake when carrying more speed than the corner ahead
@@ -2899,7 +2909,7 @@ function raceRun(cfg, veh, opts) {
       shiftRpm, launch, vmax: vmaxSeen * 3.6, total: target,
       boostUsed, underdog, boostPowerKw, comeback, strategy: strategyKey,
       comboName: combo.name, comboScore: combo.score, comboStrength,
-      paceIndex, handlingLoss, handlingGrip } };
+      paceIndex, handlingLoss, handlingGrip, cornerSpeedBonus } };
 }
 let cfg = Object.assign({}, DEFAULT);
 
@@ -5201,13 +5211,15 @@ function revealRace() {
       ? '<em class="boosttag">⚡ BOOST ' + res.boostUsed.toFixed(1) + 's</em>' : '';
     const handlingTag = race.cs && race.cs.curved && res.handlingLoss >= .005
       ? '<em class="handlingtag">旋回グリップ −' + Math.round(res.handlingLoss * 100) + '%</em>' : '';
+    const cornerBonusTag = race.cs && race.cs.curved && res.cornerSpeedBonus >= .005
+      ? '<em class="cornerbonustag">小排気量コーナー +' + Math.round(res.cornerSpeedBonus * 100) + '%</em>' : '';
     return '<div class="rescard' + (win ? " win" : "") + '">'
       + '<div class="who"><span style="color:' + LANE_COL[i % LANE_COL.length] + '">■ '
       + escapeText(race.names[i] || laneName(i)) + '</span>'
       + (res.finish >= 0 ? "<b>" + (win ? "WIN" : (rank[i] + 1) + "位") + "</b>" : "<b>DNF</b>") + '</div>'
       + '<div class="eng">' + escapeText(describeCfg(race.cfgs[i])) + " · "
       + Math.round(race.cfgs[i].redline).toLocaleString() + ' rpm'
-      + strategyTag + comboTag + boostTag + handlingTag + '</div>'
+      + strategyTag + comboTag + boostTag + handlingTag + cornerBonusTag + '</div>'
       + '<div class="nums">'
       + '<div><span>' + Math.round(race.target) + ' m</span><b>'
       + fmtT(res.finish) + '</b><i>s</i></div>'
