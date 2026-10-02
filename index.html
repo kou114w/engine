@@ -5319,9 +5319,9 @@ function drawRaceMap(g, w, h, tt) {
   const mapAreaH = Math.max(80, mapH - mapTop);
   const pad = 12;
   const spanX = Math.max(1, sh.maxx - sh.minx), spanY = Math.max(1, sh.maxy - sh.miny);
-  /* Keep the compact canvas, but zoom the route itself around its centre so
-     bends and car movement remain easy to read. */
-  const sc = 1.08 * Math.min((mapW - pad * 2) / spanX, (mapAreaH - pad * 2) / spanY);
+  /* Leave a little breathing room around the route so the start and finish
+     packs remain comfortably inside the compact phone canvas. */
+  const sc = 0.95 * Math.min((mapW - pad * 2) / spanX, (mapAreaH - pad * 2) / spanY);
   const ox = pad + (mapW - pad * 2 - spanX * sc) / 2 - sh.minx * sc;
   const oy = mapTop + pad + (mapAreaH - pad * 2 - spanY * sc) / 2 - sh.miny * sc;
   const X = i => ox + sh.px[i] * sc, Y = i => oy + sh.py[i] * sc;
