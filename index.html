@@ -241,6 +241,14 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 @media (max-width:620px){#race.many{aspect-ratio:4/5!important}}
 .resultgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule-soft);border-top:1px solid var(--rule-soft)}
 @media (max-width:520px){.resultgrid{grid-template-columns:1fr}}
+.resultsummary{grid-column:1/-1;background:var(--panel);padding:10px 13px 12px}
+.resultsummary .title{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.resultsummary table{width:100%;border-collapse:collapse;font-size:12.5px}
+.resultsummary th,.resultsummary td{padding:5px 8px;border-top:1px solid var(--rule-soft);text-align:left}
+.resultsummary th{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:#5D6875;text-transform:uppercase;font-weight:500}
+.resultsummary th:first-child,.resultsummary td:first-child{width:64px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.resultsummary tbody tr:first-child{background:rgba(74,222,128,.055)}
+.resultsummary tbody tr:first-child td:first-child{color:var(--ok);font-weight:600}
 .rescard{background:var(--panel);padding:11px 13px}
 .rescard.win{background:#181d19;box-shadow:inset 3px 0 0 var(--ok)}
 .rescard .who{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5D6875;display:flex;justify-content:space-between;gap:8px}
@@ -5199,6 +5207,15 @@ function revealRace() {
     .sort((a, b) => (a.f < 0 ? 1e9 : a.f) - (b.f < 0 ? 1e9 : b.f));
   const rank = [];
   order.forEach((o, k) => { rank[o.i] = k; });
+  const summaryRows = order.map((o, k) => {
+    const finished = o.f >= 0;
+    return '<tr><td>' + (finished ? (k + 1) + '位' : 'DNF') + '</td>'
+      + '<td style="color:' + LANE_COL[o.i % LANE_COL.length] + '">'
+      + escapeText(race.names[o.i] || laneName(o.i)) + '</td></tr>';
+  }).join('');
+  const summary = '<div class="resultsummary"><div class="title">最終順位 · RESULT</div>'
+    + '<table aria-label="最終順位"><thead><tr><th>順位</th><th>名前</th></tr></thead><tbody>'
+    + summaryRows + '</tbody></table></div>';
   const cards = race.runs.map((r, i) => {
     const res = r.result, win = rank[i] === 0 && res.finish >= 0;
     const strategy = RACE_STRATEGIES[race.strategies[i]] || RACE_STRATEGIES.stalk;
@@ -5229,7 +5246,7 @@ function revealRace() {
         : '<div><span>0-100</span><b>' + fmtT(res.t100) + '</b><i>s</i></div>')
       + '</div></div>';
   });
-  raceResult.innerHTML = cards.join("");
+  raceResult.innerHTML = summary + cards.join("");
   raceResult.hidden = false;
   const best = order[0], second = order[1];
   const gap = (best && second && best.f >= 0 && second.f >= 0) ? second.f - best.f : null;
