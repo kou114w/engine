@@ -258,6 +258,7 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .combotag{display:inline-block;margin-left:7px;color:var(--spark);font:600 9px var(--mono);letter-spacing:.05em}
 .strategytag{display:inline-block;margin-left:7px;color:var(--bankb);font:600 9px var(--mono);letter-spacing:.08em}
 .handlingtag{display:inline-block;margin-left:7px;color:#E5A83B;font:600 9px var(--mono);letter-spacing:.05em}
+.incidenttag{display:inline-block;margin-left:7px;color:#FF6B6B;font:700 9px var(--mono);letter-spacing:.05em}
 .rescard .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .rescard .nums div span{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:#5D6875;text-transform:uppercase}
 .rescard .nums div b{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em}
@@ -511,6 +512,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
             <label class="ctl"><div class="row"><span class="lab">レースルール<small>Rule</small></span></div>
               <select id="raceRule" aria-label="レースルール">
                 <option value="comeback" selected>レースバトル</option>
+                <option value="survival">サバイバル（事故・エンストあり）</option>
                 <option value="real">リアル（補助なし）</option>
               </select></label>
           </div>
@@ -519,7 +521,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
             <button class="btn-ghost" id="btnRaceReplay" disabled>もう一度再生</button>
             <button class="btn-ghost" id="btnRaceLink" hidden>対戦リンクをコピー</button>
           </div>
-          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。圧縮比・燃焼室・吸排気・カム・空燃比・点火時期などの相性が良いエンジンは、セッティングBOOSTも強くなります。2000cc以下はカーブ速度が35%向上し、5000ccに向けて補正がなめらかに減ります。直線性能が高いエンジンほどコーナーで旋回・制動・立ち上がりの負担が増え、グリップは舗装で最大30%、未舗装で最大55%低下します。</p>
+          <p class="boardnote" style="margin-top:9px">各レーンで「逃げ・先行・差し・追込」を選べます。「差し」は序盤に力を温存し、終盤の直線で強いBOOSTを使います。圧縮比・燃焼室・吸排気・カム・空燃比・点火時期などの相性が良いエンジンは、セッティングBOOSTも強くなります。「サバイバル」ではコーナー負荷・速度・路面・エンジン特性に応じて事故やエンストが発生し、DNFになります。2000cc以下はカーブ速度が35%向上し、5000ccに向けて補正がなめらかに減ります。直線性能が高いエンジンほどコーナーで旋回・制動・立ち上がりの負担が増え、グリップは舗装で最大30%、未舗装で最大55%低下します。</p>
           <p class="sharemsg" id="raceMsg"></p>
 
           <div class="garage" id="garageBox">
@@ -2704,6 +2706,22 @@ function courseShape(cs) {
   return { px, py, minx, maxx, miny, maxy };
 }
 
+/* Deterministic race hazards: the same engine, course, strategy and lane always
+   produce the same survival-mode event. Replays therefore stay fair and the
+   result can be reproduced from a shared URL without storing random state. */
+function raceHazardUnit(key, salt) {
+  const s = String(key || "race") + "|" + String(salt || "");
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  h ^= h >>> 16; h = Math.imul(h, 0x7feb352d) >>> 0;
+  h ^= h >>> 15; h = Math.imul(h, 0x846ca68b) >>> 0;
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
 /* one car's run, integrated at the audio rate so the engine's own dynamics
    decide the acceleration. Returns telemetry and the rendered engine audio. */
 function raceRun(cfg, veh, opts) {
@@ -2716,6 +2734,7 @@ function raceRun(cfg, veh, opts) {
      lower displacement/flow/redline potential, which gives an underdog a real
      passing chance without replacing the engine simulation with random luck. */
   const comeback = !!opts.comeback;
+  const survival = !!opts.survival;
   const strategyKey = raceStrategy(opts.strategy || "auto", cfg, comeback);
   const strategy = RACE_STRATEGIES[strategyKey];
   const dispL = Math.max(0.2, dispOf(cfg));
@@ -2745,6 +2764,26 @@ function raceRun(cfg, veh, opts) {
   const fullBrakeCharge = underdog >= .24 || strategyKey === "closer" || strategyKey === "deep";
   const brakeChargeScale = fullBrakeCharge ? 1 : .10 * comboStrength;
   let boost = 0, boostUsed = 0;
+  /* Plan at most one terminal event for a car, then wait for a physically
+     plausible moment to trigger it. Curves, loose surfaces and difficult power
+     delivery raise crash risk; lumpy low-cylinder engines raise stall risk. */
+  const hazardKey = opts.hazardKey || [dispL, cfg.n, cfg.cr, cfg.cam, cfg.portIn,
+    strategyKey, cs.total].join("|");
+  const camN = clamp(cfg.cam / 0.85, 0, 1);
+  const accidentChance = cs.curved
+    ? clamp(.08 + .13 * speedBurden + (cs.loose ? .12 : 0) + .08 * (1 - handlingGrip), .08, .39)
+    : clamp(.025 + .07 * speedBurden, .025, .11);
+  const stallChance = clamp(.07 + .12 * camN
+    + .07 * clamp((4 - cfg.n) / 3, 0, 1)
+    + .04 * clamp((cfg.cr - 11) / 5, 0, 1), .07, .29);
+  const hazardRoll = raceHazardUnit(hazardKey, "kind");
+  let plannedIncident = "";
+  if (survival) {
+    if (hazardRoll < accidentChance) plannedIncident = "accident";
+    else if (hazardRoll < accidentChance + stallChance) plannedIncident = "stall";
+  }
+  const hazardAt = .16 + .68 * raceHazardUnit(hazardKey, "where");
+  let incident = "", incidentType = "", incidentAt = -1;
   /* a slow car round a twisty course needs a long clock; a drag strip does not */
   const maxT = opts.maxT || clamp(target / 11 + 22, 30, 130);
   const e = new EngineSim(sr);
@@ -2899,6 +2938,31 @@ function raceRun(cfg, veh, opts) {
       matching = true; sinceShift = 0;
       matchRatio = ratioOf(gear) / ratioOf(prevGear);
     }
+    /* A planned incident is only released where its cause exists. Accidents on
+       a bend require lateral load; a straight-line accident requires speed or
+       wheelspin. Stalls happen under a shift, braking or a lugging load. */
+    if (!incident && plannedIncident && progress >= hazardAt && t > 2) {
+      if (plannedIncident === "accident") {
+        const cornerDanger = cs.curved && kap > .002 && (latUse > .30 || roadGrip < .90);
+        const straightDanger = !cs.curved && v > 25 && (spin || progress > hazardAt + .08);
+        if (cornerDanger || straightDanger) {
+          incidentType = "accident";
+          incident = cs.loose ? "ラリー路面でクラッシュ"
+            : cs.curved ? "コーナーでクラッシュ" : "高速走行中にクラッシュ";
+        }
+      } else {
+        const lugging = e.rpm < Math.max(cfg.idle * 1.35, downRpm * 1.05);
+        if (shiftT > 0 || brake > .12 || lugging || spin || progress > hazardAt + .10) {
+          incidentType = "stall";
+          incident = lugging ? "低回転でエンスト" : "シフト中にエンスト";
+        }
+      }
+      if (incident) {
+        incidentAt = t;
+        e.ignition = false;
+        v = 0;
+      }
+    }
     if (mark60 < 0 && v * 3.6 >= 60) mark60 = t;
     if (mark100 < 0 && v * 3.6 >= 100) mark100 = t;
     if (mark200 < 0 && v * 3.6 >= 200) mark200 = t;
@@ -2909,6 +2973,17 @@ function raceRun(cfg, veh, opts) {
       tel.brake.push(brake > 0.05 ? 1 : 0);
       tel.boost.push(boost); tel.energy.push(boostMax > 0 ? boostEnergy / boostMax : 0);
     }
+    if (incident) {
+      /* Ensure the stopped car has a final telemetry point even if the regular
+         display sampling boundary did not land on the event sample. */
+      if (!tel.t.length || tel.t[tel.t.length - 1] !== t) {
+        tel.t.push(t); tel.v.push(0); tel.rpm.push(e.rpm);
+        tel.gear.push(gear + 1); tel.dist.push(dist); tel.spin.push(0);
+        tel.brake.push(brake > .05 ? 1 : 0); tel.boost.push(0);
+        tel.energy.push(boostMax > 0 ? boostEnergy / boostMax : 0);
+      }
+      break;
+    }
     if (finish >= 0 && t > finish + 0.35) break;
   }
   return { tel, audio, len: ai, sr: arate,
@@ -2916,7 +2991,8 @@ function raceRun(cfg, veh, opts) {
       shiftRpm, launch, vmax: vmaxSeen * 3.6, total: target,
       boostUsed, underdog, boostPowerKw, comeback, strategy: strategyKey,
       comboName: combo.name, comboScore: combo.score, comboStrength,
-      paceIndex, handlingLoss, handlingGrip, cornerSpeedBonus } };
+      paceIndex, handlingLoss, handlingGrip, cornerSpeedBonus,
+      survival, incident, incidentType, incidentAt } };
 }
 let cfg = Object.assign({}, DEFAULT);
 
@@ -5027,7 +5103,9 @@ async function startRace() {
   sayRace("エントリーを読み込んでいます…", "");
   raceResult.hidden = true;
   raceInfo.firstChild.textContent = "準備中";
-  const comeback = raceRuleSel.value === "comeback";
+  const rule = raceRuleSel.value;
+  const survival = rule === "survival";
+  const comeback = rule !== "real";
   const entries = [];
   for (const L of lanes) {
     const r = await resolveLane(L.sel, L.input, laneName(L.i), L.name);
@@ -5046,9 +5124,12 @@ async function startRace() {
   const runCache = Object.create(null);
   try {
     for (let i = 0; i < entries.length; i++) {
-      const e = entries[i], key = encodeCfg(e.cfg) + "|" + e.strategy;
+      const e = entries[i];
+      const hazardKey = encodeCfg(e.cfg) + "|" + courseSel.value + "|" + vehSel.value
+        + "|" + e.strategy + "|lane:" + i;
+      const key = encodeCfg(e.cfg) + "|" + e.strategy + (survival ? "|survival|" + i : "");
       const run = runCache[key] || (runCache[key] = raceRun(e.cfg, veh,
-        { course: cs, sr: raceSr, comeback, strategy: e.strategy }));
+        { course: cs, sr: raceSr, comeback, survival, hazardKey, strategy: e.strategy }));
       runs.push(run);
       sayRace(entries.length + "台を走らせています… " + (i + 1) + " / " + entries.length, "");
       /* Let the browser paint progress and answer the OS between cars. */
@@ -5062,7 +5143,7 @@ async function startRace() {
     runs, cfgs: entries.map(e => e.cfg), names: entries.map(e => e.label),
     strategies: entries.map(e => e.strategy), strategyChoices: entries.map(e => e.strategyChoice),
     baseNames: entries.map((e, i) => e.base || laneName(i)),
-    veh, cs, target: cs.total, comeback,
+    veh, cs, target: cs.total, rule, comeback, survival,
     dur: Math.max.apply(null, runs.map((r, i) => r.len / r.sr)),
     sampleRate: runs[0].sr, audioBuf: null,
     t0: 0, playing: false, phase: "preparing", src: null, revealed: false,
@@ -5071,9 +5152,11 @@ async function startRace() {
   };
   btnRace.disabled = false; btnRace.textContent = "レース開始";
   btnRaceReplay.disabled = false;
-  raceInfo.firstChild.textContent = comeback ? "走行中 · レースバトル" : "走行中";
-  sayRace(comeback
-    ? "ブレーキとエンジン設定の相性で充電し、直線でBOOSTを自動使用します。結果は最後に出ます。"
+  raceInfo.firstChild.textContent = survival ? "走行中 · サバイバル"
+    : comeback ? "走行中 · レースバトル" : "走行中";
+  sayRace(survival
+    ? "事故・エンストに注意。BOOSTを使うサバイバルレースです。結果は最後に出ます。"
+    : comeback ? "ブレーキとエンジン設定の相性で充電し、直線でBOOSTを自動使用します。結果は最後に出ます。"
     : "結果は走り終わってから出ます。", "");
   await playRace();
 }
@@ -5100,7 +5183,8 @@ async function playRace() {
   if (!ok) {
     activeRace.t0 = performance.now() / 1000;
     activeRace.playing = true; activeRace.phase = "running"; activeRace.clock = "perf";
-    raceInfo.firstChild.textContent = activeRace.comeback ? "走行中 · レースバトル" : "走行中";
+    raceInfo.firstChild.textContent = activeRace.survival ? "走行中 · サバイバル"
+      : activeRace.comeback ? "走行中 · レースバトル" : "走行中";
     armRaceFinish(activeRace);
     return;
   }
@@ -5118,7 +5202,8 @@ async function playRace() {
     catch (err) {
       activeRace.t0 = performance.now() / 1000;
       activeRace.playing = true; activeRace.phase = "running"; activeRace.clock = "perf";
-      raceInfo.firstChild.textContent = activeRace.comeback ? "走行中 · レースバトル" : "走行中";
+      raceInfo.firstChild.textContent = activeRace.survival ? "走行中 · サバイバル"
+        : activeRace.comeback ? "走行中 · レースバトル" : "走行中";
       armRaceFinish(activeRace);
       return;
     }
@@ -5161,7 +5246,8 @@ async function playRace() {
   src.start();
   activeRace.src = src; activeRace.t0 = ctx.currentTime;
   activeRace.playing = true; activeRace.phase = "running"; activeRace.clock = "ctx";
-  raceInfo.firstChild.textContent = activeRace.comeback ? "走行中 · レースバトル" : "走行中";
+  raceInfo.firstChild.textContent = activeRace.survival ? "走行中 · サバイバル"
+    : activeRace.comeback ? "走行中 · レースバトル" : "走行中";
   armRaceFinish(activeRace);
 }
 
@@ -5227,13 +5313,15 @@ function revealRace() {
       ? '<em class="boosttag">⚡ BOOST ' + res.boostUsed.toFixed(1) + 's</em>' : '';
     const handlingTag = race.cs && race.cs.curved && res.handlingLoss >= .005
       ? '<em class="handlingtag">旋回グリップ −' + Math.round(res.handlingLoss * 100) + '%</em>' : '';
+    const incidentTag = res.incident
+      ? '<em class="incidenttag">⚠ ' + escapeText(res.incident) + '</em>' : '';
     return '<div class="rescard' + (win ? " win" : "") + '">'
       + '<div class="who"><span style="color:' + LANE_COL[i % LANE_COL.length] + '">■ '
       + escapeText(race.names[i] || laneName(i)) + '</span>'
       + (res.finish >= 0 ? "<b>" + (win ? "WIN" : (rank[i] + 1) + "位") + "</b>" : "<b>DNF</b>") + '</div>'
       + '<div class="eng">' + escapeText(describeCfg(race.cfgs[i])) + " · "
       + Math.round(race.cfgs[i].redline).toLocaleString() + ' rpm'
-      + strategyTag + comboTag + boostTag + handlingTag + '</div>'
+      + strategyTag + comboTag + boostTag + handlingTag + incidentTag + '</div>'
       + '<div class="nums">'
       + '<div><span>' + Math.round(race.target) + ' m</span><b>'
       + fmtT(res.finish) + '</b><i>s</i></div>'
@@ -6264,7 +6352,7 @@ function hashParams() {
 }
 function applyHash() {
   const hp = hashParams();
-  if (hp.rule === "comeback" || hp.rule === "real") raceRuleSel.value = hp.rule;
+  if (hp.rule === "comeback" || hp.rule === "survival" || hp.rule === "real") raceRuleSel.value = hp.rule;
   if (hp.course && COURSES[hp.course]) courseSel.value = hp.course;
   if (hp.veh && VEHICLES[hp.veh]) vehSel.value = hp.veh;
   const cfgs = RACE_KEYS.map(k => (hp[k] ? decodeCfg(hp[k]) : null));
