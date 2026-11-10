@@ -219,6 +219,14 @@ kbd{font-family:var(--mono);font-size:10px;background:#1C232B;border:1px solid v
 .lane.a{box-shadow:inset 3px 0 0 var(--spark)}
 .lane.b{box-shadow:inset 3px 0 0 var(--bankb)}
 .lane select{margin-bottom:0}
+.lane > .row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+/* × in the lane's top-right corner */
+.lanedel{flex:none;width:22px;height:22px;display:grid;place-items:center;padding:0;
+  background:transparent;border:1px solid transparent;border-radius:2px;
+  color:#6E7A88;font-size:15px;line-height:1;cursor:pointer;transition:.13s}
+.lanedel:hover{color:var(--danger);border-color:rgba(255,59,48,.4);background:rgba(255,59,48,.08)}
+.lanedel[hidden]{display:none}
+@media (pointer:coarse){.lanedel{width:32px;height:32px;font-size:18px}}
 .lane .lanestrategy{margin-top:8px;color:var(--heat)}
 .lane input{margin-top:8px}
 .lanename{width:100%;background:var(--panel-2);border:1px solid var(--rule);border-radius:2px;
@@ -5009,10 +5017,13 @@ function laneChanged(i, wait) {
 }
 
 /* ---- build however many lanes were asked for, keeping what was typed ---- */
-function buildLanes(n) {
+function laneState(L) {
+  return { sel: L.sel.value, val: L.input.value, nm: L.name.value,
+    strat: L.strategy.value, touched: L.strategyTouched };
+}
+function buildLanes(n, keep) {
   n = clamp(Math.round(n) || 2, 2, MAX_RACE_ENTRIES);
-  const prev = lanes.map(L => ({ sel: L.sel.value, val: L.input.value, nm: L.name.value,
-    strat: L.strategy.value, touched: L.strategyTouched }));
+  const prev = keep || lanes.map(laneState);
   lanesBox.innerHTML = "";
   lanes = [];
   for (let i = 0; i < n; i++) {
@@ -5025,6 +5036,14 @@ function buildLanes(n) {
     const sm = document.createElement("small");
     sm.textContent = "LANE " + String.fromCharCode(65 + i);
     lab.appendChild(sm); row.appendChild(lab);
+    /* a race needs two cars, so the × only appears while there is one to spare */
+    const del = document.createElement("button");
+    del.type = "button"; del.className = "lanedel"; del.textContent = "×";
+    del.title = laneName(i) + "を外す";
+    del.setAttribute("aria-label", laneName(i) + "を外す");
+    del.hidden = n <= 2;
+    del.addEventListener("click", () => removeLane(i));
+    row.appendChild(del);
     const sel = document.createElement("select");
     sel.innerHTML = laneOptions;
     sel.setAttribute("aria-label", laneName(i) + "のエンジン");
@@ -5054,7 +5073,7 @@ function buildLanes(n) {
       laneChanged(i, 250);
       /* a race already on screen is redrawn every frame, so a name typed while
          the cars are running lands on the car immediately */
-      if (race && race.names && race.names[i] !== undefined) {
+      if (race && race.names && race.names[i] !== undefined && race.runs.length === lanes.length) {
         race.names[i] = laneLabel(nameInp) || race.baseNames[i];
       }
     });
@@ -5083,6 +5102,17 @@ function buildLanes(n) {
   for (let i = 0; i < n; i++) laneChanged(i, 0);
 }
 laneCountSel.addEventListener("change", () => buildLanes(+laneCountSel.value));
+
+/* Take one car out and close the gap: the cars after it move up a lane and keep
+   everything that was typed into them — engine, number, name and strategy. */
+function removeLane(i) {
+  if (lanes.length <= 2 || !lanes[i]) return;
+  const gone = laneLabel(lanes[i].name) || laneName(i);
+  const keep = lanes.filter((_, k) => k !== i).map(laneState);
+  laneCountSel.value = String(keep.length);
+  buildLanes(keep.length, keep);
+  sayRace(gone + " を外しました（残り " + keep.length + " 台）。", "");
+}
 
 /* ---- run them all ---- */
 async function startRace() {
