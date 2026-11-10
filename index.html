@@ -164,6 +164,16 @@ canvas{display:block;width:100%}
 }
 .starter:hover{background:#FF8138}
 .starter[data-on=true]{background:#1C232B;color:var(--ink);box-shadow:inset 0 0 0 1px var(--rule)}
+/* an indicator lamp, so on and off read as states rather than as two labels */
+.starter{display:inline-flex;align-items:center;gap:10px}
+.starter .lamp{width:9px;height:9px;border-radius:50%;flex:none;background:#5C2A0B;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+.starter[data-state=on] .lamp{background:var(--ok);box-shadow:0 0 0 2px rgba(74,222,128,.18),0 0 10px var(--ok)}
+.starter[data-state=on]:hover{background:#2A1416;box-shadow:inset 0 0 0 1px rgba(255,59,48,.55)}
+.starter[data-state=stopping]{background:#1C232B;color:var(--heat);box-shadow:inset 0 0 0 1px var(--rule)}
+.starter[data-state=stopping] .lamp{background:var(--heat);animation:lampblink .5s steps(2) infinite}
+@keyframes lampblink{50%{opacity:.2}}
+@media (prefers-reduced-motion:reduce){.starter .lamp{animation:none!important}}
 .pedal{flex:1 1 300px;min-width:220px}
 .pedal .plab{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
 .pedal .track{height:26px;background:#151A20;border:1px solid var(--rule);border-radius:2px;position:relative;overflow:hidden;cursor:pointer;touch-action:none}
@@ -571,7 +581,7 @@ button,select,.track,.check,.panel > h2{touch-action:manipulation}
 
 <div class="deck" id="deck">
   <div class="deck-in">
-    <button class="starter" id="btnStart" data-on="false">エンジン始動</button>
+    <button class="starter" id="btnStart" data-on="false" data-state="off" aria-pressed="false"><i class="lamp" aria-hidden="true"></i><span id="btnStartTxt">エンジン始動</span></button>
     <div class="pedal">
       <div class="plab"><span>Throttle</span><span id="thrPct">0%</span></div>
       <div class="track" id="pedal"><div class="fill" id="thrFill"></div><div class="ticks"></div></div>
@@ -3417,11 +3427,17 @@ async function startAudio() {
   node.onaudioprocess = ev => {
     const L = ev.outputBuffer.getChannelData(0), R = ev.outputBuffer.getChannelData(1);
     if (!running) { L.fill(0); R.fill(0); return; }
+    /* switched on while a race had the speakers: crank it now that it is the
+       bench's turn, not back then, or the starter times out unheard */
+    if (pendingCrank) { pendingCrank = false; crank(); }
     for (let i = 0; i < L.length; i++) {
       sim.step();
       L[i] = sim.sampleL; R[i] = sim.sampleR;
       if ((i & 1) === 0) { scopeBuf[scopeI] = sim.sampleL; scopeI = (scopeI + 1) % scopeBuf.length; }
     }
+    /* ignition off: the engine has been coasting down on its own friction and
+       pumping losses; once it has all but stopped, it is off */
+    if (stopping && sim.rpm < 25) finishStop();
   };
   const g = ctx.createGain(); g.gain.value = 0.85;
   node.connect(g); g.connect(ctx.destination);
@@ -3436,18 +3452,61 @@ function showWarn(t) {
 
 /* ---------- starter ---------- */
 const btnStart = document.getElementById("btnStart");
-btnStart.addEventListener("click", async () => {
-  if (!running) {
-    const ok = await startAudio(); if (!ok) return;
-    running = true; sim.ignition = true; sim.starter = true; sim.idleI = 0.02;
-    btnStart.textContent = "エンジン停止"; btnStart.dataset.on = "true";
-    setTimeout(() => { if (sim) sim.starter = false; }, 4000);   // backstop; it normally drops out on its own
-  } else {
-    running = false; sim.ignition = false; sim.starter = false;
-    sim.omega = 0; sim.crank = 0; sim.P.fill(1); sim.pman = 0.35;
+/* engineOn is whether the key is turned. `running` is narrower: whether the
+   bench is rendering audio right now, which a race borrows while it plays. The
+   button follows the key, so it stays honest while a race has the speakers. */
+let engineOn = false, stopping = false, starting = false, pendingCrank = false;
+const btnStartTxt = document.getElementById("btnStartTxt");
+function setStarterUI(state) {                  // "off" | "on" | "stopping"
+  btnStart.dataset.state = state;
+  btnStart.dataset.on = state === "on" ? "true" : "false";
+  btnStart.setAttribute("aria-pressed", String(state === "on"));
+  btnStartTxt.textContent = state === "on" ? "エンジン停止" : state === "stopping" ? "停止中…" : "エンジン始動";
+  btnStart.title = state === "on" ? "押すとエンジンを切ります" : state === "stopping" ? "押すともう一度かけます" : "押すとエンジンをかけます";
+}
+function raceHasAudio() { return !!(race && race.phase && race.phase !== "finished"); }
+function finishStop() {
+  stopping = false; engineOn = false; running = false; pendingCrank = false;
+  if (sim) {
+    sim.ignition = false; sim.starter = false;
+    sim.omega = 0; sim.rpm = 0; sim.crank = 0; sim.P.fill(1); sim.pman = 0.35;
     sim.rF.fill(0); sim.rB.fill(0); sim.colF.fill(0); sim.colB.fill(0);
-    btnStart.textContent = "エンジン始動"; btnStart.dataset.on = "false";
   }
+  setStarterUI("off");
+}
+function crank() {
+  sim.ignition = true; sim.starter = true; sim.idleI = 0.02;
+  setTimeout(() => { if (sim) sim.starter = false; }, 4000);   // backstop; it normally drops out on its own
+}
+btnStart.addEventListener("click", async () => {
+  if (starting) return;                          // a second tap while audio is still opening
+  if (stopping) {
+    /* turned back on while still coasting: relight, and only use the starter
+       if it has already slowed below where it would catch on its own */
+    stopping = false; engineOn = true;
+    sim.ignition = true;
+    if (sim.rpm < cfg.idle * 0.7) crank();
+    setStarterUI("on");
+    return;
+  }
+  if (!engineOn) {
+    starting = true;
+    const ok = await startAudio();
+    starting = false;
+    if (!ok) return;
+    engineOn = true;
+    if (raceHasAudio()) { pendingCrank = true; race.resumeEngine = true; }   // cranks when the race hands the speakers back
+    else { crank(); running = true; }
+    setStarterUI("on");
+    return;
+  }
+  /* key off. Fuel and spark stop; the engine is not frozen in place but runs
+     down on its own, which is both what it sounds like and what the gauge shows */
+  sim.ignition = false; sim.starter = false;
+  if (raceHasAudio() || !running) { if (race) race.resumeEngine = false; finishStop(); return; }
+  stopping = true;
+  setStarterUI("stopping");
+  setTimeout(() => { if (stopping) finishStop(); }, 5000);       // backstop
 });
 
 document.getElementById("btnPanic").addEventListener("click", () => {
@@ -3600,6 +3659,7 @@ function drawTach() {
   // status strip
   g.font = "500 10px 'IBM Plex Mono',monospace"; g.textAlign = "left";
   const st = !running ? "STOPPED"
+    : stopping ? "SHUTDOWN"
     : (sim && sim.starter) ? "CRANKING"
     : (sim && rpm < 60) ? "STALLED"
     : (sim && sim.cut > 0) ? "LIMITER"
